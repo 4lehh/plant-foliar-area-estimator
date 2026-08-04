@@ -219,3 +219,9 @@ __marimo__/
 
 # Registro
 registro.md
+
+# Imagenes 
+*.tif
+dataset/
+dataset_output/
+*.jpg

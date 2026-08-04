@@ -14,26 +14,26 @@ Repositorio destinado al estudio del estado del arte, preprocesamiento de datase
 - [x] **Elaboración de Presentación (PPT):**
   - [x] Sintetizar ventajas y limitaciones de herramientas tradicionales vs. Deep Learning.
   - [x] Definir la arquitectura propuesta y el flujo de trabajo previsto.
-  - [ ] Presentar avance inicial a la profesora responsable.
+  - [x] Presentar avance inicial a la profesora responsable.
 
 ---
 
 ### Fase 2: Exploración de Herramientas Baseline
-- [ ] **Pruebas en ImageJ:**
-  - [ ] Calibrar escala espacial (píxel a $cm/mm$) utilizando la regla de referencia presente en las imágenes.
-  - [ ] Realizar pruebas de segmentación manual/semiautomática (Color Threshold, Thresholding Binarizado, Analyze Particles).
-  - [ ] Exportar métricas de área foliar como *ground truth* inicial para validación.
-- [ ] **Exploración de Roboflow:**
-  - [ ] Crear proyecto de *Instance Segmentation* en Roboflow.
-  - [ ] Familiarizarse con las herramientas de etiquetado poligonal (*Smart Polygon*, *Auto-Label*).
-  - [ ] Definir taxonomía de clases y metadatos/etiquetas por tratamiento (ej. `sin_tratamiento`, `tratamiento_riego`, `tratamiento_SM4.3`, etc.).
+- [x] **Pruebas en ImageJ:**
+  - [x] Calibrar escala espacial (píxel a $cm/mm$) utilizando la regla de referencia presente en las imágenes.
+  - [x] Realizar pruebas de segmentación manual/semiautomática (Color Threshold, Thresholding Binarizado, Analyze Particles).
+  - [x] Exportar métricas de área foliar como *ground truth* inicial para validación.
+- [x] **Exploración de Roboflow:**
+  - [x] Crear proyecto de *Instance Segmentation* en Roboflow.
+  - [x] Familiarizarse con las herramientas de etiquetado poligonal (*Smart Polygon*, *Auto-Label*).
+  - [x] Definir taxonomía de clases y metadatos/etiquetas por tratamiento (ej. `sin_tratamiento`, `tratamiento_riego`, `tratamiento_SM4.3`, etc.).
 
 ---
 
 ### Fase 3: Curaduría, Segmentación del Dataset y Etiquetado
-- [ ] **Organización e inspección del dataset crudo:**
-  - [ ] Mapear carpetas recibidas (ej. *MicroTom*, *Lechuga + SM4.3*, etc.).
-  - [ ] Filtrar y clasificar imágenes grupales que contienen múltiples hojas o folíolos en una misma captura.
+- [x] **Organización e inspección del dataset crudo:**
+  - [x] Mapear carpetas recibidas (ej. *MicroTom*, *Lechuga + SM4.3*, etc.).
+  - [x] Filtrar y clasificar imágenes grupales que contienen múltiples hojas o folíolos en una misma captura.
 - [ ] **Segmentación de hojas individuales & Etiquetado:**
   - [ ] Cargar imágenes a Roboflow.
   - [ ] Trazar máscaras poligonales individuales para cada hoja (aislar de tallos o raíces si estuviesen presentes).
