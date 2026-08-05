@@ -14,10 +14,7 @@ def calcular_area(modelo, ruta_imagen, ruta_salida) -> tuple:
     if img is None:
         print(f"Error: No se pudo cargar la imagen en {ruta_imagen}")
         return 0, 0.0
-
-    # ==========================================
-    # PROCESAMIENTO Y CÁLCULO
-    # ==========================================
+    
     # Calcular la resolución en píxeles de ESTA imagen específica
     alto_px, ancho_px = img.shape[:2]
     area_total_px = alto_px * ancho_px
@@ -46,12 +43,19 @@ def calcular_area(modelo, ruta_imagen, ruta_salida) -> tuple:
                     area_total_hojas_cm2 += area_cm2
                     contador_hojas += 1
                     
-                    # Dibujar el contorno en verde sobre la imagen
-                    cv2.drawContours(img, [contorno], -1, (0, 255, 0), 2)
+                    # 1. Creamos una capa transparente (overlay)
+                    capa_pintada = img.copy()
+                    
+                    # 2. Pintamos el relleno sólido azul oscuro (BGR: Azul=130, Verde=20, Rojo=20)
+                    cv2.drawContours(capa_pintada, [contorno], -1, (130, 20, 20), -1)
+                    
+                    # 3. Fusionamos la capa pintada con la imagen original (50% de opacidad)
+                    opacidad = 0.5
+                    cv2.addWeighted(capa_pintada, opacidad, img, 1 - opacidad, 0, img)
+                    
+                    # 4. Dibujamos un borde azul más brillante (255, 50, 50) para que el contorno resalte
+                    cv2.drawContours(img, [contorno], -1, (255, 50, 50), 2)
 
-    # ==========================================
-    # GUARDAR RESULTADO (En vez de mostrarlo)
-    # ==========================================
     # En Docker guardamos la imagen procesada en vez de usar cv2.imshow
     cv2.imwrite(ruta_salida, img)
 

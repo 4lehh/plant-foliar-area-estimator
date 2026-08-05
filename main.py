@@ -34,11 +34,11 @@ def train():
     )
 
 def test():
-    ruta_modelo = "./volumen/pesos/best-v2.pt" 
+    ruta_modelo = "./datos/pesos/best-v2.pt" 
     model = YOLO(ruta_modelo)
 
     # Imagen de prueba
-    ruta_imagen_prueba = "./volumen/dataset/val/NT_121.jpg"
+    ruta_imagen_prueba = "./datos/entrada/NT_097.jpg"
     resultados = model(ruta_imagen_prueba)
 
     for resultado in resultados:
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # if not os.path.isdir(CARPETA_DATASET):
     #     convertir_yolo()
 
-    operacion = 3
+    operacion = 2
 
     if operacion == 1:
         train()
