@@ -54,8 +54,8 @@ def test():
 
 if __name__ == "__main__":
     
-    if not os.path.isdir(CARPETA_DATASET):
-        convertir_yolo()
+    # if not os.path.isdir(CARPETA_DATASET):
+    #     convertir_yolo()
 
     operacion = 3
 
