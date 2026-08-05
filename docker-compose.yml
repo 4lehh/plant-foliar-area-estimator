@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # 1. El Backend (FastAPI)
+  api:
+    build: ./api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Conecta tu carpeta local 'volumen' a la carpeta '/app/volumen' en el contenedor
+      - ./volumen:/app/volumen
+    restart: always
+
+  # 2. El Motor de Inferencia (YOLO)
+  modelo:
+    build: ./model
+    volumes:
+      # Conecta exactamente la misma carpeta para que ambos compartan los archivos
+      - ./volumen:/app/volumen
+    depends_on:
+      - api
+    restart: always
+
+  # 3. El Frontend (Servidor Web Nginx)
+  interfaz_web:
+    image: nginx:alpine
+    ports:
+      - "80:80"  # Podrás entrar desde http://localhost
+    volumes:
+      # Conecta tu carpeta 'fronted' directamente al servidor web
+      - ./fronted:/usr/share/nginx/html:ro

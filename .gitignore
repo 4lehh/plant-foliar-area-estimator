@@ -225,3 +225,5 @@ registro.md
 dataset/
 dataset_output/
 *.jpg
+runs/
+YOLODataset_Hojas/
