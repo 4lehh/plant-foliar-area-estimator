@@ -15,22 +15,26 @@
  * usuario lo elige a mano en el menú ⋮ → Settings → Theme. Así la paleta reacciona
  * sola en vez de quedar fija en blanco/negro.
  */
-
 :root {
-    /* Borde y texto "muted" (se adaptará solo gracias a que le inyectaremos --color-text) */
+    /* Borde y texto "muted": una versión translúcida del color de texto activo,
+       así se ven bien tanto sobre fondos claros como oscuros sin definir dos juegos. */
     --color-border: color-mix(in srgb, var(--color-text) 18%, transparent);
     --color-muted: color-mix(in srgb, var(--color-text) 55%, transparent);
 
-    /* Verde pino fijo */
+    /* Verde pino: color de marca fijo, usado como relleno sólido (header, botón de
+       descarga) donde el texto siempre es blanco, así que no necesita adaptarse. */
     --color-primary: #1F3D2B;
     --color-primary-light: #3F6C4C;
 
-    /* Variantes que reaccionan solas al --color-text inyectado */
+    /* Variante de verde pensada para TEXTO/bordes sobre el fondo de la app: se mezcla
+       con --color-text para aclararse automáticamente en modo oscuro. */
     --color-primary-ink: color-mix(in srgb, var(--color-primary) 55%, var(--color-text) 45%);
+
+    /* Ámbar: igual, se mezcla levemente con el texto para ganar contraste en oscuro. */
     --color-accent: color-mix(in srgb, #B8860B 75%, var(--color-text) 25%);
     --color-accent-soft: #F4E6C2;
 
-    /* Superficies secundarias (sidebar) */
+    /* Tinte de marca para superficies secundarias (sidebar). */
     --color-surface-tint: color-mix(in srgb, var(--color-surface) 90%, var(--color-primary) 10%);
 
     --radius-sm: 6px;
@@ -129,6 +133,50 @@ html, body, [class*="css"] {
     font-weight: 600;
     color: var(--color-primary-ink);
     line-height: 1;
+}
+
+/* ---------- Tabla de detalle por hoja ---------- */
+.leaf-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 1.4rem 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.leaf-table thead th {
+    text-align: left;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    font-weight: 600;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.leaf-table tbody td {
+    padding: 0.5rem 1rem;
+    color: var(--color-text);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.leaf-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.leaf-table tbody tr:hover td {
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+
+.leaf-table td:last-child {
+    color: var(--color-primary-ink);
+    font-weight: 600;
 }
 
 /* ---------- Image "viewfinder" frames (signature element) ---------- */

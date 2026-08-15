@@ -9,6 +9,7 @@ Run with: streamlit run app.py
 
 import os
 from pathlib import Path
+from textwrap import dedent
 
 import streamlit as st
 from streamlit_theme import st_theme
@@ -30,6 +31,19 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 # ================================ UTILIDADES ================================
+
+def render_html(bloque_html: str) -> None:
+    """
+    Renderiza un bloque HTML multilínea.
+
+    Streamlit pasa el texto de st.markdown por un parser de Markdown antes
+    de insertar el HTML: si el bloque queda indentado (como ocurre de forma
+    natural al escribir un f-string dentro de una función), Markdown lo
+    interpreta como un bloque de código en vez de HTML crudo, rompiendo el
+    render. dedent() + strip() eliminan esa indentación común antes de pasarlo.
+    """
+    st.markdown(dedent(bloque_html).strip(), unsafe_allow_html=True)
+
 
 def inyectar_estilos(ruta_css: Path) -> None:
     """Carga el CSS personalizado e inyecta dinámicamente las variables de tema."""
@@ -92,7 +106,7 @@ def limpiar_historial() -> None:
 # ================================ COMPONENTES ================================
 
 def render_header() -> None:
-    st.markdown(
+    render_html(
         """
         <div class="app-header">
             <div class="app-header__icon">🌿</div>
@@ -104,8 +118,7 @@ def render_header() -> None:
                 </p>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
@@ -121,14 +134,14 @@ def render_sidebar() -> None:
 
         st.divider()
 
-        if st.button("🗑️ Limpiar historial de análisis", use_container_width=True):
+        if st.button("🗑️ Limpiar historial de análisis", width="stretch"):
             limpiar_historial()
             st.success("Historial eliminado correctamente.")
             st.rerun()
 
 
 def render_metricas(hojas: int, area: float) -> None:
-    st.markdown(
+    render_html(
         f"""
         <div class="specimen-row">
             <div class="specimen-card">
@@ -140,8 +153,35 @@ def render_metricas(hojas: int, area: float) -> None:
                 <p class="specimen-card__value">{area:.2f} cm²</p>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
+    )
+
+
+def render_detalle_hojas(detalle_hojas: list[dict]) -> None:
+    """Muestra el área individual de cada hoja detectada, en una tabla compacta."""
+    if not detalle_hojas:
+        return
+
+    filas = "".join(
+        f"<tr><td>Hoja {hoja['numero']}</td><td>{hoja['area_cm2']:.2f} cm²</td></tr>"
+        for hoja in detalle_hojas
+    )
+
+    render_html('<p class="section-eyebrow">Detalle por hoja</p>')
+    render_html(
+        f"""
+        <table class="leaf-table">
+            <thead>
+                <tr>
+                    <th>Ejemplar</th>
+                    <th>Área individual</th>
+                </tr>
+            </thead>
+            <tbody>
+                {filas}
+            </tbody>
+        </table>
+        """
     )
 
 
@@ -154,7 +194,7 @@ def render_analisis(modelo: YOLO, archivo_subido) -> None:
 
     try:
         with st.spinner("🧠 El modelo está procesando la imagen..."):
-            hojas, area = calcular_area(modelo, ruta_entrada, ruta_salida)
+            hojas, area, detalle_hojas = calcular_area(modelo, ruta_entrada, ruta_salida)
     except Exception as exc:
         st.error(
             "No fue posible procesar la imagen. Verifica que el archivo "
@@ -162,15 +202,16 @@ def render_analisis(modelo: YOLO, archivo_subido) -> None:
         )
         return
 
-    st.markdown('<p class="section-eyebrow">Resultados del análisis</p>', unsafe_allow_html=True)
+    render_html('<p class="section-eyebrow">Resultados del análisis</p>')
     render_metricas(hojas, area)
+    render_detalle_hojas(detalle_hojas)
 
-    st.markdown('<p class="section-eyebrow">Comparación visual</p>', unsafe_allow_html=True)
+    render_html('<p class="section-eyebrow">Comparación visual</p>')
     img_col1, img_col2 = st.columns(2)
     with img_col1:
-        st.image(ruta_entrada, caption="Fotografía original", use_container_width=True)
+        st.image(ruta_entrada, caption="Fotografía original", width="stretch")
     with img_col2:
-        st.image(ruta_salida, caption="Máscara de segmentación", use_container_width=True)
+        st.image(ruta_salida, caption="Máscara de segmentación", width="stretch")
 
     with open(ruta_salida, "rb") as file:
         st.download_button(
@@ -178,12 +219,12 @@ def render_analisis(modelo: YOLO, archivo_subido) -> None:
             data=file,
             file_name=f"analisis_{archivo_subido.name}",
             mime="image/jpeg",
-            use_container_width=False,
+            width="content",
         )
 
 
 def render_galeria() -> None:
-    st.markdown('<p class="section-eyebrow">Historial de muestras</p>', unsafe_allow_html=True)
+    render_html('<p class="section-eyebrow">Historial de muestras</p>')
 
     imagenes_salida = listar_imagenes(OUTPUT_DIR)
 
@@ -195,14 +236,11 @@ def render_galeria() -> None:
         columnas = st.columns(3)
         for idx, img_name in enumerate(imagenes_salida):
             ruta_img = os.path.join(OUTPUT_DIR, img_name)
-            columnas[idx % 3].image(ruta_img, caption=img_name, use_container_width=True)
+            columnas[idx % 3].image(ruta_img, caption=img_name, width="stretch")
 
 
 def render_footer() -> None:
-    st.markdown(
-        '<p class="app-footer">Plant Foliar Area Estimator · CDIA · Impulsado por YOLO11</p>',
-        unsafe_allow_html=True,
-    )
+    render_html('<p class="app-footer">Plant Foliar Area Estimator · CDIA · Impulsado por YOLO11</p>')
 
 
 # ================================== MAIN ====================================
@@ -224,7 +262,7 @@ def main() -> None:
     render_header()
     render_sidebar()
 
-    st.markdown('<p class="section-eyebrow">Nueva muestra</p>', unsafe_allow_html=True)
+    render_html('<p class="section-eyebrow">Nueva muestra</p>')
     st.write(
         "Sube la imagen de una muestra y el modelo calculará automáticamente la "
         "superficie. Formatos admitidos: JPG, JPEG y PNG."
