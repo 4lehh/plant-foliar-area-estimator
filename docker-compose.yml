@@ -2,6 +2,6 @@ services:
   interfaz-foliar:
     build: .
     ports:
-      - "8501:8501"
+      - "8501:8000"
     volumes:
       - ./datos:/app/datos/

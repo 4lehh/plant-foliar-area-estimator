@@ -1,5 +1,6 @@
 ultralytics==8.4.115
 opencv-python-headless==5.0.0.93
 numpy
-streamlit
-st-theme
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.18

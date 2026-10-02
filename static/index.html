@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plant Foliar Area Estimator · CDIA</title>
+  <meta name="description" content="Segmentación de hojas y cálculo de área foliar mediante YOLO11." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="app-header__icon" aria-hidden="true">🌿</div>
+      <div class="app-header__text">
+        <p class="app-header__eyebrow">CDIA · Visión computacional</p>
+        <h1 class="app-header__title">Plant Foliar Area Estimator</h1>
+        <p class="app-header__subtitle">Segmentación de hojas y cálculo de área foliar mediante YOLO11.</p>
+      </div>
+    </header>
+
+    <!-- Nueva muestra -->
+    <section class="section" aria-labelledby="nueva-muestra-title">
+      <p class="section-eyebrow" id="nueva-muestra-title">Nueva muestra</p>
+      <p class="section-description">Sube la imagen de una muestra y el modelo calculará automáticamente la superficie. Formatos admitidos: JPG, JPEG y PNG.</p>
+
+      <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Zona de subida de imágenes. Arrastra un archivo o haz clic para seleccionar.">
+        <input type="file" id="fileInput" accept=".jpg,.jpeg,.png" hidden />
+        <div class="upload-zone__content">
+          <svg class="upload-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>
+          <p class="upload-zone__text">Arrastra una imagen aquí o <span class="upload-zone__link">haz clic para seleccionar</span></p>
+          <p class="upload-zone__hint">JPG, JPEG, PNG · Máx. 50MB</p>
+        </div>
+        <div class="upload-zone__preview hidden" id="uploadPreview" aria-live="polite">
+          <img id="previewImg" alt="Vista previa de la imagen seleccionada" />
+          <button type="button" class="btn btn-ghost upload-zone__remove" id="removeFile" aria-label="Eliminar archivo seleccionado">×</button>
+        </div>
+      </div>
+
+      <div class="actions" id="actions" hidden>
+        <button type="button" class="btn btn-primary" id="analyzeBtn" disabled>
+          <span class="btn__text">Analizar</span>
+          <span class="btn__loader hidden" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="btn btn-ghost" id="clearSelectionBtn" hidden>Cancelar</button>
+      </div>
+
+      <!-- Loader global -->
+      <div class="loader-overlay hidden" id="loaderOverlay" role="status" aria-live="polite" aria-label="Procesando imagen">
+        <div class="loader"></div>
+        <p>Procesando imagen con YOLO11…</p>
+      </div>
+
+      <!-- Error -->
+      <div class="error hidden" id="errorBox" role="alert" aria-live="assertive"></div>
+    </section>
+
+    <!-- Resultados -->
+    <section class="section results hidden" id="resultsSection" aria-labelledby="resultados-title">
+      <p class="section-eyebrow" id="resultados-title">Resultados del análisis</p>
+
+      <!-- Métricas -->
+      <div class="specimen-row" id="metricsRow">
+        <div class="specimen-card">
+          <p class="specimen-card__label">Hojas detectadas</p>
+          <p class="specimen-card__value" id="leavesCount">—</p>
+        </div>
+        <div class="specimen-card">
+          <p class="specimen-card__label">Área foliar total</p>
+          <p class="specimen-card__value" id="totalArea">— cm²</p>
+        </div>
+      </div>
+
+      <!-- Detalle por hoja -->
+      <div class="leaf-detail" id="leafDetail" hidden>
+        <p class="section-eyebrow">Detalle por hoja</p>
+        <div class="table-wrapper">
+          <table class="leaf-table">
+            <thead>
+              <tr>
+                <th>Ejemplar</th>
+                <th>Área individual</th>
+              </tr>
+            </thead>
+            <tbody id="leafTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Comparación visual -->
+      <div class="comparison" id="comparison" hidden>
+        <p class="section-eyebrow">Comparación visual</p>
+        <div class="comparison-grid">
+          <figure class="image-frame">
+            <figcaption>Fotografía original</figcaption>
+            <img id="originalImg" alt="Fotografía original de la muestra" />
+          </figure>
+          <figure class="image-frame">
+            <figcaption>Máscara de segmentación</figcaption>
+            <img id="maskImg" alt="Máscara de segmentación generada por el modelo" />
+          </figure>
+        </div>
+        <div class="comparison-actions">
+          <a class="btn btn-primary" id="downloadBtn" href="#" download>
+            <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>
+            <span>Descargar imagen procesada</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Historial / Galería -->
+    <section class="section gallery-section" aria-labelledby="galeria-title">
+      <div class="gallery-header">
+        <p class="section-eyebrow" id="galeria-title">Historial de muestras</p>
+        <button type="button" class="btn btn-ghost" id="clearHistoryBtn">
+          <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          <span>Limpiar historial</span>
+        </button>
+      </div>
+
+      <div class="gallery-empty hidden" id="galleryEmpty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M4 8h16M8 16h8"></path></svg>
+        <p>El historial está vacío. Sube una fotografía para registrar tu primer análisis.</p>
+      </div>
+
+      <div class="gallery-grid hidden" id="galleryGrid" role="list" aria-label="Galería de análisis previos"></div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>Plant Foliar Area Estimator · CDIA · Impulsado por YOLO11</p>
+    </footer>
+  </main>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>
