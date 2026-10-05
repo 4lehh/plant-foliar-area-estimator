@@ -1,298 +1,590 @@
+/* =========================================================================
+   Estimador de área foliar — lógica de interfaz
+   ========================================================================= */
+
 const API = {
   analyze: "/api/analyze",
   gallery: "/api/gallery",
   clear: "/api/clear",
 };
 
-// ESTADO
-let currentFile = null;
-let currentMaskFilename = null;
+/* Marco de captura usado por el modelo: 21,8 cm de ancho x 30 cm de alto
+   (constantes ANCHO_FISICO_CM y ALTO_FISICO_CM en src/calcular_area.py). */
+const MARCO_CM2 = 654;
 
-// UTILIDADES
+const TIPOS_ACEPTADOS = ["image/jpeg", "image/jpg", "image/png"];
+const MAX_BYTES = 50 * 1024 * 1024;
+const CLAVE_TUTORIAL = "foliar.tutorial.v1";
+
+let archivoActual = null;
+let urlPrevia = null;
+let analizando = false;
+let control = null;
+
+// ============================== UTILIDADES ==============================
 
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
 
-const formatArea = (value) => {
-  const num = Number(value);
-  if (!isFinite(num)) return "—";
-  return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " cm²";
-};
+/* El manifiesto de fuentes se autohospeda, así que el navegador no puede
+   knowing de antemano que hacen falta; se avisa al empezar a cargar y se
+   retira en cuanto el texto está listo. Sin esto la primera pintura sale con
+   la tipografía de reserva. */
+const fuentes = document.fonts;
+let avisoFuentes = null;
 
-const show = (el, show = true) => {
-  if (!el) return;
-  el.hidden = !show;
-  el.classList.toggle("hidden", !show);
-};
-
-const setLoading = (btn, loading) => {
-  if (!btn) return;
-  const text = btn.querySelector(".btn__text");
-  const loader = btn.querySelector(".btn__loader");
-  btn.disabled = loading;
-  show(text, !loading);
-  show(loader, loading);
-  btn.classList.toggle("loading", loading);
-};
-
-// ELEMENTOS DOM
-const uploadZone = $("#uploadZone");
-const fileInput = $("#fileInput");
-const uploadPreview = $("#uploadPreview");
-const previewImg = $("#previewImg");
-const removeFileBtn = $("#removeFile");
-const clearSelectionBtn = $("#clearSelectionBtn");
-const actions = $("#actions");
-const analyzeBtn = $("#analyzeBtn");
-const loaderOverlay = $("#loaderOverlay");
-const errorBox = $("#errorBox");
-
-const resultsSection = $("#resultsSection");
-const leavesCount = $("#leavesCount");
-const totalArea = $("#totalArea");
-const leafDetail = $("#leafDetail");
-const leafTableBody = $("#leafTableBody");
-const comparison = $("#comparison");
-const originalImg = $("#originalImg");
-const maskImg = $("#maskImg");
-const downloadBtn = $("#downloadBtn");
-
-const galleryEmpty = $("#galleryEmpty");
-const galleryGrid = $("#galleryGrid");
-const clearHistoryBtn = $("#clearHistoryBtn");
-
-// ============================== FUNCIONES DE UI ==============================
-
-function resetUploadUI() {
-  currentFile = null;
-  currentMaskFilename = null;
-  show(uploadZone.querySelector(".upload-zone__content"), true);
-  show(uploadPreview, false);
-  show(actions, false);
-  show(errorBox, false);
-  analyzeBtn.disabled = true;
-  resultsSection.hidden = true;
-  resultsSection.classList.add("hidden");
-  show(leafDetail, false);
-  show(comparison, false);
-}
-
-function setUploadPreview(file) {
-  const url = URL.createObjectURL(file);
-  previewImg.src = url;
-  previewImg.alt = `Vista previa: ${file.name}`;
-  show(uploadZone.querySelector(".upload-zone__content"), false);
-  show(uploadPreview, true);
-  show(actions, true);
-  analyzeBtn.disabled = false;
-}
-
-function showError(message) {
-  errorBox.textContent = message;
-  show(errorBox, true);
-  setLoading(analyzeBtn, false);
-}
-
-function clearError() {
-  show(errorBox, false);
-}
-
-function renderResults(data) {
-  // Métricas
-  leavesCount.textContent = data.leaves;
-  totalArea.textContent = formatArea(data.total_area_cm2);
-
-  // Detalle por hoja
-  leafTableBody.innerHTML = "";
-  if (data.per_leaf && data.per_leaf.length > 0) {
-    data.per_leaf.forEach((hoja) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>Hoja ${hoja.numero}</td>
-        <td>${formatArea(hoja.area_cm2)}</td>
-      `;
-      leafTableBody.appendChild(tr);
-    });
-    show(leafDetail, true);
+if (fuentes) {
+  if (fuentes.status === "loaded") {
+    document.documentElement.classList.add("fuentes-listas");
   } else {
-    show(leafDetail, false);
+    avisoFuentes = fuentes.ready.then(() => {
+      document.documentElement.classList.add("fuentes-listas");
+    });
   }
-
-  // Comparación visual
-  originalImg.src = data.original_url;
-  originalImg.alt = `Fotografía original: ${data.original_filename}`;
-  maskImg.src = data.mask_url;
-  maskImg.alt = `Máscara de segmentación: ${data.mask_filename}`;
-  downloadBtn.href = data.download_url;
-  downloadBtn.download = `analisis_${data.original_filename}`;
-
-  show(comparison, true);
-  show(resultsSection, true);
-  resultsSection.classList.remove("hidden");
-
-  // Guardar para referencia
-  currentMaskFilename = data.mask_filename;
 }
 
-function renderGallery(items) {
-  galleryGrid.innerHTML = "";
-  if (!items || items.length === 0) {
-    show(galleryEmpty, true);
-    show(galleryGrid, false);
-    return;
-  }
-  show(galleryEmpty, false);
-  show(galleryGrid, true);
+const sinMovimiento = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  items.forEach((item) => {
-    const li = document.createElement("li");
-    li.className = "gallery-item";
-    li.role = "listitem";
-    li.innerHTML = `
-      <figure class="image-frame">
-        <img src="${item.url}" alt="${item.original_name}" loading="lazy" />
-        <figcaption>${item.original_name}</figcaption>
-      </figure>
-    `;
-    // Click abre la imagen original en nueva pestaña
-    li.querySelector("img").addEventListener("click", () => {
-      window.open(item.url, "_blank", "noopener");
-    });
-    galleryGrid.appendChild(li);
+/* Un fallo aquí no debe romper el resto de la interfaz */
+window.addEventListener("error", (e) => console.error("Interfaz:", e.message));
+
+const num = (valor, decimales = 2) =>
+  Number(valor).toLocaleString("es-CL", {
+    minimumFractionDigits: decimales,
+    maximumFractionDigits: decimales,
+  });
+
+const entero = (valor) => Number(valor).toLocaleString("es-CL");
+
+const mostrar = (el, visible) => {
+  if (!el) return;
+  el.hidden = !visible;
+};
+
+const FOCUABLES =
+  'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
+
+// ============================== ELEMENTOS ==============================
+
+const ventanaCarga = $("#uploadZone");
+const inputArchivo = $("#fileInput");
+const zonaPrompt = $("#uploadPrompt");
+const zonaCargada = $("#uploadPreview");
+const nombrePrevia = $("#previewName");
+const escenario = $("#stage");
+const btnQuitar = $("#removeFile");
+const acciones = $("#actions");
+const btnAnalizar = $("#analyzeBtn");
+const etiquetaAnalizar = btnAnalizar.querySelector(".btn__label");
+const btnCancelar = $("#clearSelectionBtn");
+const velo = $("#loaderOverlay");
+const btnCancelarAnalisis = $("#cancelAnalyze");
+const cajaError = $("#errorBox");
+const textoError = $("#errorText");
+
+const pasos = $$(".rail__step");
+const lineaEstado = $("#statusLine");
+const textoEstado = $("#statusText");
+
+const seccionResultado = $("#resultsSection");
+const campoHojas = $("#leavesCount");
+const campoArea = $("#totalArea");
+const campoCobertura = $("#coverage");
+const barraCobertura = $("#gaugeFill");
+const campoArchivo = $("#resultFile");
+const campoCuando = $("#resultWhen");
+const bloqueHojas = $("#leafDetail");
+const listaHojas = $("#leafList");
+const bloqueComparacion = $("#comparison");
+const placaOriginal = $("#plateOriginal");
+const placaMascara = $("#plateMask");
+const bloqueDescarga = $("#downloadWrap");
+const btnDescarga = $("#downloadBtn");
+
+const notaGaleria = $("#galleryNote");
+const galeriaVacia = $("#galleryEmpty");
+const galeriaGrid = $("#galleryGrid");
+const btnLimpiar = $("#clearHistoryBtn");
+
+const modalTutorial = $("#tutorialModal");
+const casillaNoMostrar = $("#dontShowAgain");
+const modalConfirmar = $("#confirmModal");
+
+// ============================== RIEL DE ESTADO ==============================
+
+function marcarPaso(n) {
+  pasos.forEach((paso) => {
+    const i = Number(paso.dataset.step);
+    paso.classList.toggle("is-current", i === n);
+    paso.classList.toggle("is-done", i < n);
   });
 }
 
-async function loadGallery() {
-  try {
-    const res = await fetch(API.gallery);
-    if (!res.ok) throw new Error("Error al cargar galería");
-    const data = await res.json();
-    renderGallery(data.items);
-  } catch (err) {
-    console.error("Galería:", err);
-    show(galleryEmpty, true);
-    show(galleryGrid, false);
-    galleryEmpty.querySelector("p").textContent = "No se pudo cargar el historial.";
-  }
+function estado(texto, modo = "") {
+  textoEstado.textContent = texto;
+  lineaEstado.classList.toggle("is-busy", modo === "busy");
+  lineaEstado.classList.toggle("is-done", modo === "listo");
 }
 
-// ============================== EVENTOS ==============================
+// ============================== DIÁLOGOS ==============================
 
-// Drag & drop en zona de subida
+const sincronizarBloqueo = () => {
+  const alguno = $$(".modal").some((m) => !m.hidden);
+  document.documentElement.classList.toggle("is-locked", alguno);
+};
+
+function crearDialogo(el, resultadoPorDefecto = false) {
+  const dlg = { el, ultimoFoco: null, respuesta: resultadoPorDefecto };
+
+  dlg.abrir = () => {
+    if (!el.hidden) return;
+    dlg.ultimoFoco = document.activeElement;
+    dlg.respuesta = resultadoPorDefecto;
+    el.hidden = false;
+    sincronizarBloqueo();
+    el.addEventListener("keydown", alTeclear);
+    requestAnimationFrame(() => el.classList.add("is-open"));
+    const inicio = el.querySelector(".modal__close") || el.querySelector(FOCUABLES);
+    if (inicio) inicio.focus();
+  };
+
+  dlg.cerrar = (respuesta) => {
+    if (el.hidden) return;
+    dlg.respuesta = respuesta;
+    el.classList.remove("is-open");
+    el.removeEventListener("keydown", alTeclear);
+    window.setTimeout(() => {
+      el.hidden = true;
+      sincronizarBloqueo();
+      if (dlg.ultimoFoco && document.contains(dlg.ultimoFoco)) dlg.ultimoFoco.focus();
+    }, 200);
+  };
+
+  function alTeclear(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      dlg.cerrar(resultadoPorDefecto);
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const focuables = $$(FOCUABLES, el).filter((n) => n.offsetParent !== null);
+    if (!focuables.length) return;
+    const primero = focuables[0];
+    const ultimo = focuables[focuables.length - 1];
+    if (e.shiftKey && document.activeElement === primero) {
+      e.preventDefault();
+      ultimo.focus();
+    } else if (!e.shiftKey && document.activeElement === ultimo) {
+      e.preventDefault();
+      primero.focus();
+    }
+  }
+
+  el.addEventListener("click", (e) => {
+    const disparador = e.target.closest("[data-close]");
+    if (disparador) dlg.cerrar(disparador.dataset.result === "true");
+  });
+
+  return dlg;
+}
+
+const tutorial = crearDialogo(modalTutorial, true);
+const confirmar = crearDialogo(modalConfirmar, false);
+
+function preguntar(mensaje, textoOk) {
+  $("#confirmText").textContent = mensaje;
+  $("#confirmOk").textContent = textoOk;
+  $("#confirmTitle").textContent = "¿Borrar todo el historial?";
+  return new Promise((resolve) => {
+    const listener = () => {
+      modalConfirmar.removeEventListener("cerrado", listener);
+      resolve(confirmar.respuesta);
+    };
+    modalConfirmar.addEventListener("cerrado", listener);
+    confirmar.abrir();
+  });
+}
+
+// El diálogo de confirmación avisa cuando termina de cerrarse, para no
+// resolver la promesa antes de que la animación termine.
+new MutationObserver((_, obs) => {
+  if (!modalConfirmar.hidden) return;
+  obs.disconnect();
+  modalConfirmar.dispatchEvent(new Event("cerrado"));
+}).observe(modalConfirmar, { attributes: true, attributeFilter: ["hidden"] });
+
+$("#helpBtn").addEventListener("click", () => tutorial.abrir());
+$("#tutorialOk").addEventListener("click", () => {
+  localStorage.setItem(CLAVE_TUTORIAL, casillaNoMostrar.checked ? "off" : "done");
+});
+
+// ============================== SELECCIÓN DE ARCHIVO ==============================
+
+function mostrarError(mensaje, recuperacion) {
+  textoError.textContent = "";
+  textoError.append(mensaje);
+  if (recuperacion) {
+    const sep = document.createElement("br");
+    textoError.append(sep, recuperacion);
+  }
+  mostrar(cajaError, true);
+  estado("Revisa el mensaje para continuar");
+}
+
+function limpiarError() {
+  mostrar(cajaError, false);
+}
+
+function reiniciarFoto() {
+  archivoActual = null;
+  if (urlPrevia) {
+    URL.revokeObjectURL(urlPrevia);
+    urlPrevia = null;
+  }
+  $("#previewImg")?.remove();
+  mostrar(zonaPrompt, true);
+  mostrar(zonaCargada, false);
+  mostrar(acciones, false);
+  escenario.classList.remove("is-scanning");
+  limpiarError();
+}
+
+function reiniciarTodo() {
+  reiniciarFoto();
+  seccionResultado.hidden = true;
+  mostrar(bloqueHojas, false);
+  mostrar(bloqueComparacion, false);
+  mostrar(bloqueDescarga, false);
+}
+
+function reiniciarAnimacionRegistro() {
+  $$(".stage__corner", escenario).forEach((esquina) => {
+    esquina.style.animation = "none";
+    void esquina.offsetWidth;
+    esquina.style.animation = "";
+  });
+}
+
+function prepararPrevia(archivo) {
+  if (urlPrevia) URL.revokeObjectURL(urlPrevia);
+  archivoActual = archivo;
+  urlPrevia = URL.createObjectURL(archivo);
+
+  // La miniatura se inserta al elegir el archivo: en el marcado inicial no
+  // hay <img> sin src, que el navegador mostraría roto.
+  $("#previewImg")?.remove();
+  const imagen = document.createElement("img");
+  imagen.className = "stage__img";
+  imagen.id = "previewImg";
+  imagen.alt = `Vista previa de ${archivo.name}`;
+  imagen.decoding = "async";
+  imagen.src = urlPrevia;
+  escenario.prepend(imagen);
+
+  nombrePrevia.textContent = archivo.name;
+  mostrar(zonaPrompt, false);
+  mostrar(zonaCargada, true);
+  mostrar(acciones, true);
+  btnAnalizar.disabled = false;
+  reiniciarAnimacionRegistro();
+  limpiarError();
+  marcarPaso(2);
+  estado("Fotografía lista para analizar");
+}
+
+function recibirArchivo(archivo) {
+  if (!archivo) return;
+  if (!TIPOS_ACEPTADOS.includes(archivo.type)) {
+    mostrarError(
+      "Ese archivo no es una imagen.",
+      "Usa una fotografía en formato JPG o PNG."
+    );
+    return;
+  }
+  if (archivo.size > MAX_BYTES) {
+    mostrarError(
+      "La fotografía pesa demasiado.",
+      "El límite es 50 MB. Baja la resolución a 1920 × 1080 o más e inténtalo de nuevo."
+    );
+    return;
+  }
+  prepararPrevia(archivo);
+}
+
+// Drag & drop
 ["dragenter", "dragover"].forEach((evt) => {
-  uploadZone.addEventListener(evt, (e) => {
+  ventanaCarga.addEventListener(evt, (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    uploadZone.classList.add("dragover");
+    ventanaCarga.classList.add("is-over");
   });
 });
 
 ["dragleave", "drop"].forEach((evt) => {
-  uploadZone.addEventListener(evt, (e) => {
+  ventanaCarga.addEventListener(evt, (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    uploadZone.classList.remove("dragover");
+    ventanaCarga.classList.remove("is-over");
   });
 });
 
-uploadZone.addEventListener("drop", (e) => {
-  const file = e.dataTransfer.files[0];
-  if (file) handleFileSelect(file);
+ventanaCarga.addEventListener("drop", (e) => {
+  if (analizando) return;
+  recibirArchivo(e.dataTransfer?.files?.[0]);
 });
 
-uploadZone.addEventListener("click", (e) => {
-  if (e.target.closest(".upload-zone__remove")) return;
-  if (e.target.closest("#uploadPreview")) return;
-  fileInput.click();
+inputArchivo.addEventListener("change", (e) => {
+  const archivo = e.target.files?.[0];
+  e.target.value = "";
+  if (archivo) recibirArchivo(archivo);
 });
 
-uploadZone.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    fileInput.click();
-  }
+btnQuitar.addEventListener("click", () => {
+  reiniciarFoto();
+  marcarPaso(1);
+  estado("Sin fotografía");
+  inputArchivo.focus();
 });
 
-fileInput.addEventListener("change", (e) => {
-  if (e.target.files[0]) handleFileSelect(e.target.files[0]);
+btnCancelar.addEventListener("click", () => {
+  reiniciarFoto();
+  marcarPaso(1);
+  estado("Sin fotografía");
 });
 
-removeFileBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  resetUploadUI();
-});
+// ============================== ANÁLISIS ==============================
 
-clearSelectionBtn.addEventListener("click", resetUploadUI);
+btnAnalizar.addEventListener("click", async () => {
+  if (!archivoActual || analizando) return;
 
-function handleFileSelect(file) {
-  const allowed = ["image/jpeg", "image/png", "image/jpg"];
-  if (!allowed.includes(file.type)) {
-    showError("Formato no permitido. Usa JPG, JPEG o PNG.");
-    fileInput.value = "";
-    return;
-  }
-  if (file.size > 50 * 1024 * 1024) {
-    showError("El archivo supera el límite de 50 MB.");
-    fileInput.value = "";
-    return;
-  }
-  currentFile = file;
-  clearError();
-  setUploadPreview(file);
-}
+  analizando = true;
+  control = new AbortController();
+  limpiarError();
+  btnAnalizar.disabled = true;
+  etiquetaAnalizar.textContent = "Analizando…";
+  mostrar(velo, true);
+  escenario.classList.add("is-scanning");
+  ventanaCarga.setAttribute("aria-busy", "true");
+  marcarPaso(2);
+  estado("Analizando la fotografía…", "busy");
 
-// Analizar
-analyzeBtn.addEventListener("click", async () => {
-  if (!currentFile) return;
-  clearError();
-  setLoading(analyzeBtn, true);
-  show(loaderOverlay, true);
-
-  const formData = new FormData();
-  formData.append("file", currentFile);
+  const datos = new FormData();
+  datos.append("file", archivoActual);
 
   try {
     const res = await fetch(API.analyze, {
       method: "POST",
-      body: formData,
+      body: datos,
+      signal: control.signal,
     });
-    const data = await res.json();
+    const cuerpo = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      throw new Error(data.detail || "Error en el servidor");
-    }
+    if (!res.ok) throw new Error(cuerpo.detail || "No fue posible procesar la imagen.");
 
-    renderResults(data);
-    await loadGallery();
+    mostrarResultado(cuerpo);
+    await cargarGaleria();
+    marcarPaso(3);
+    estado("Análisis completo", "listo");
+    seccionResultado.scrollIntoView({
+      behavior: sinMovimiento() ? "auto" : "smooth",
+      block: "start",
+    });
   } catch (err) {
-    showError(err.message || "No fue posible procesar la imagen.");
+    if (err.name === "AbortError") {
+      marcarPaso(2);
+      estado("Análisis cancelado");
+      return;
+    }
+    // La fotografía sigue cargada: el operador reintenta desde el paso 2.
+    marcarPaso(2);
+    const detalle = err.message || "";
+    if (/modelo/i.test(detalle)) {
+      mostrarError(
+        "El sistema no está listo para analizar.",
+        "El modelo no se pudo cargar en el servidor. Avisa a quien administra la aplicación."
+      );
+    } else if (/conexi|network|fetch/i.test(detalle)) {
+      mostrarError(
+        "No se pudo conectar con el servidor.",
+        "Comprueba que la aplicación siga encendida e inténtalo otra vez."
+      );
+    } else {
+      mostrarError(detalle || "No fue posible procesar la fotografía.", "Inténtalo con otra imagen.");
+    }
   } finally {
-    setLoading(analyzeBtn, false);
-    show(loaderOverlay, false);
+    analizando = false;
+    control = null;
+    btnAnalizar.disabled = false;
+    etiquetaAnalizar.textContent = "Analizar";
+    mostrar(velo, false);
+    escenario.classList.remove("is-scanning");
+    ventanaCarga.removeAttribute("aria-busy");
   }
 });
 
-// Limpiar historial
-clearHistoryBtn.addEventListener("click", async () => {
-  if (!confirm("¿Eliminar todo el historial de análisis? Esta acción no se puede deshacer.")) return;
+btnCancelarAnalisis.addEventListener("click", () => {
+  if (analizando) control?.abort();
+});
+
+function mostrarResultado(datos) {
+  const area = Number(datos.total_area_cm2) || 0;
+  const hojas = Number(datos.leaves) || 0;
+
+  campoHojas.textContent = entero(hojas);
+  campoArea.textContent = num(area);
+
+  const cobertura = Math.min(100, Math.max(0, (area / MARCO_CM2) * 100));
+  campoCobertura.textContent = `${num(cobertura, 1)} %`;
+  barraCobertura.style.transform = `scaleX(${cobertura / 100})`;
+
+  campoArchivo.textContent = datos.original_filename || "—";
+  campoCuando.textContent = new Date().toLocaleTimeString("es-CL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  // Detalle por hoja: el orden del modelo se conserva porque la máscara
+  // rotula cada contorno con su número.
+  listaHojas.innerHTML = "";
+  const detalle = Array.isArray(datos.per_leaf) ? datos.per_leaf : [];
+  const mayor = detalle.reduce((max, h) => Math.max(max, Number(h.area_cm2) || 0), 0);
+
+  if (detalle.length) {
+    detalle.forEach((hoja) => {
+      const valor = Number(hoja.area_cm2) || 0;
+      const li = document.createElement("li");
+      li.className = "leaf";
+
+      const nombre = document.createElement("span");
+      nombre.className = "leaf__name";
+      nombre.textContent = `Hoja ${hoja.numero}`;
+
+      const barra = document.createElement("span");
+      barra.className = "leaf__bar";
+      const relleno = document.createElement("span");
+      relleno.className = "leaf__fill";
+      relleno.style.width = mayor > 0 ? `${(valor / mayor) * 100}%` : "0%";
+      barra.append(relleno);
+
+      const areaHoja = document.createElement("span");
+      areaHoja.className = "leaf__area";
+      areaHoja.textContent = `${num(valor)} cm²`;
+
+      li.append(nombre, barra, areaHoja);
+      listaHojas.appendChild(li);
+    });
+    mostrar(bloqueHojas, true);
+  } else {
+    mostrar(bloqueHojas, false);
+  }
+
+  // Las imágenes se insertan al llegar el resultado: en el marcado inicial no
+  // hay <img> sin src, que el navegador mostraría roto.
+  montarPlaca(placaOriginal, datos.original_url, `Fotografía original de ${datos.original_filename}`);
+  montarPlaca(placaMascara, datos.mask_url, "Máscara de segmentación con el contorno de cada hoja detectada");
+
+  btnDescarga.href = datos.download_url;
+  btnDescarga.download = `analisis_${datos.original_filename}`;
+
+  mostrar(bloqueComparacion, true);
+  mostrar(bloqueDescarga, true);
+  seccionResultado.hidden = false;
+}
+
+function montarPlaca(placa, url, alt) {
+  const imagen = document.createElement("img");
+  imagen.src = url;
+  imagen.alt = alt;
+  imagen.decoding = "async";
+  placa.prepend(imagen);
+}
+
+// ============================== HISTORIAL ==============================
+
+async function cargarGaleria() {
+  try {
+    const res = await fetch(API.gallery);
+    if (!res.ok) throw new Error("No se pudo cargar el historial");
+    const datos = await res.json();
+    pintarGaleria(datos.items || []);
+  } catch (err) {
+    console.error("Galería:", err);
+    notaGaleria.textContent = "No se pudo leer el historial.";
+    mostrar(galeriaGrid, false);
+    mostrar(galeriaVacia, true);
+  }
+}
+
+function pintarGaleria(items) {
+  galeriaGrid.innerHTML = "";
+
+  if (!items.length) {
+    notaGaleria.textContent = "Sin análisis todavía";
+    mostrar(galeriaVacia, true);
+    mostrar(galeriaGrid, false);
+    return;
+  }
+
+  const plural = items.length === 1 ? "1 análisis guardado" : `${entero(items.length)} análisis guardados`;
+  notaGaleria.textContent = `${plural}. Haz clic en uno para abrirlo en otra pestaña.`;
+  mostrar(galeriaVacia, false);
+  mostrar(galeriaGrid, true);
+
+  items.forEach((item) => {
+    const li = document.createElement("li");
+    const enlace = document.createElement("a");
+    enlace.className = "shot";
+    enlace.href = item.url;
+    enlace.target = "_blank";
+    enlace.rel = "noopener";
+    enlace.setAttribute(
+      "aria-label",
+      `Abrir la imagen procesada de ${item.original_name} en una pestaña nueva`
+    );
+
+    const imagen = document.createElement("img");
+    imagen.src = item.url;
+    imagen.alt = `Máscara de segmentación de ${item.original_name}`;
+    imagen.loading = "lazy";
+
+    const pie = document.createElement("figcaption");
+    pie.textContent = item.original_name;
+
+    enlace.append(imagen, pie);
+    li.append(enlace);
+    galeriaGrid.appendChild(li);
+  });
+}
+
+btnLimpiar.addEventListener("click", async () => {
+  const aceptado = await preguntar(
+    "Se eliminarán las fotografías originales y las imágenes procesadas guardadas. Esta acción no se puede deshacer.",
+    "Sí, borrar todo"
+  );
+  if (!aceptado) return;
 
   try {
     const res = await fetch(API.clear, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Error al limpiar");
-    resetUploadUI();
-    await loadGallery();
+    const cuerpo = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(cuerpo.detail || "No se pudo limpiar el historial");
+    reiniciarTodo();
+    await cargarGaleria();
+    marcarPaso(1);
+    estado("Historial borrado", "listo");
   } catch (err) {
-    alert("Error al limpiar historial: " + err.message);
+    mostrarError(err.message || "No se pudo borrar el historial.", "Inténtalo de nuevo en un momento.");
   }
 });
 
 // ============================== INICIO ==============================
+
 document.addEventListener("DOMContentLoaded", () => {
-  loadGallery();
+  cargarGaleria();
+  if (!localStorage.getItem(CLAVE_TUTORIAL)) {
+    window.setTimeout(() => tutorial.abrir(), 350);
+  }
 });
 
-// Limpieza de URLs de objeto al salir
 window.addEventListener("beforeunload", () => {
-  if (previewImg.src.startsWith("blob:")) URL.revokeObjectURL(previewImg.src);
+  if (urlPrevia) URL.revokeObjectURL(urlPrevia);
 });

@@ -227,3 +227,5 @@ dataset_output/
 *.jpg
 runs/
 YOLODataset_Hojas/
+.impeccable/
+
