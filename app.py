@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from ultralytics import YOLO
@@ -64,6 +64,20 @@ app = FastAPI(
 # Archivos estáticos
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
+
+@app.middleware("http")
+async def revalidar_siempre(request: Request, call_next):
+    """Obliga al navegador a revalidar en cada carga.
+
+    Sin Cache-Control, el navegador aplica caché heurística y puede seguir
+    mostrando un CSS/JS viejo tras un despliegue, aunque el servidor sirva la
+    versión nueva. Con 'no-cache' el navegador revalida (y recibe 304 si no
+    cambió), así que el cambio se ve sin tener que limpiar la caché a mano.
+    """
+    respuesta = await call_next(request)
+    respuesta.headers["Cache-Control"] = "no-cache"
+    return respuesta
 
 
 # ================================ UTILIDADES ================================
