@@ -10,11 +10,19 @@
   <link rel="stylesheet" href="/assets/styles.css" />
 </head>
 <body>
+  <noscript>
+    <div class="noscript">
+      <strong>Esta herramienta necesita JavaScript.</strong>
+      Actívalo en el navegador para subir la fotografía y ver el área foliar. El cálculo
+      lo hace el servidor; el navegador solo prepara la foto y muestra el resultado.
+    </div>
+  </noscript>
+
   <div class="edge-wash" aria-hidden="true"></div>
 
-  <a class="skip-link" href="#capture">Ir a la zona de análisis</a>
+  <a class="skip-link" href="#capture">Ir a la zona de carga</a>
 
-  <div class="shell">
+  <div class="shell" id="shell">
 
     <!-- ============ Encabezado ============ -->
     <header class="topbar">
@@ -43,9 +51,9 @@
     </header>
 
     <!-- ============ Riel de estado ============ -->
-    <nav class="rail" aria-label="Progreso del análisis">
+    <div class="rail" role="group" aria-label="Progreso del análisis">
       <ol class="rail__steps">
-        <li class="rail__step is-current" data-step="1"><span class="rail__num">1</span> Carga</li>
+        <li class="rail__step is-current" data-step="1" aria-current="step"><span class="rail__num">1</span> Carga</li>
         <li class="rail__link" aria-hidden="true"></li>
         <li class="rail__step" data-step="2"><span class="rail__num">2</span> Analiza</li>
         <li class="rail__link" aria-hidden="true"></li>
@@ -55,10 +63,10 @@
         <span class="status__dot" aria-hidden="true"></span>
         <span id="statusText">Sin fotografía</span>
       </p>
-    </nav>
+    </div>
 
     <!-- ============ Captura ============ -->
-    <section class="section" id="capture" aria-labelledby="capture-title">
+    <section class="section" id="capture" aria-labelledby="capture-title" tabindex="-1">
       <h2 class="section__title" id="capture-title">Encuadra y sube tu fotografía</h2>
       <p class="section__lead">
         La muestra debe ocupar un área de <strong>21,8 cm de ancho × 30 cm de alto</strong>, apoyada sobre una base clara.
@@ -66,7 +74,16 @@
       </p>
 
       <div class="window" id="uploadZone">
-        <input type="file" id="fileInput" class="vh" accept=".jpg,.jpeg,.png" />
+        <!-- El nombre accesible va en aria-label y no solo en el <label>: al elegir
+             la fotografía el label se oculta, y un control enfocado sin nombre
+             no le dice nada a quien navega con lector de pantalla. -->
+        <input
+          type="file"
+          id="fileInput"
+          class="vh"
+          accept=".jpg,.jpeg,.png"
+          aria-label="Fotografía de la muestra, en JPG o PNG"
+        />
 
         <div class="window__grid" aria-hidden="true"></div>
 
@@ -88,7 +105,7 @@
           </span>
           <span class="window__prompttext">
             <span class="window__cta">Arrastra la fotografía aquí o <span class="linky">búscala en tu computador</span></span>
-            <span class="window__hint">JPG o PNG · hasta 50 MB · 3400 × 4679 px o más</span>
+            <span class="window__hint">JPG o PNG · hasta 50 MB · en vertical, como el marco</span>
           </span>
         </label>
 
@@ -100,10 +117,11 @@
             <span class="stage__corner stage__corner--tr" aria-hidden="true"></span>
             <span class="stage__corner stage__corner--bl" aria-hidden="true"></span>
             <span class="stage__corner stage__corner--br" aria-hidden="true"></span>
-            <div class="stage__scan" aria-hidden="true"></div>
+            <div class="stage__outside" aria-hidden="true"></div>
             <p class="stage__name" id="previewName"></p>
           </div>
-          <div class="loaded__tools">
+          <p class="stage__warn" id="frameWarn" hidden></p>
+          <div class="window__loadedtools">
             <button type="button" class="btn btn-quiet" id="removeFile">
               <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
                 <path d="M4 7h16" stroke-linecap="round" />
@@ -150,10 +168,10 @@
           <div class="fact">
             <dt class="fact__k">Cobertura del marco (654 cm²)</dt>
             <dd class="fact__v" id="coverage">—</dd>
-            <span class="gauge" aria-hidden="true"><span class="gauge__fill" id="gaugeFill" style="width:0%"></span></span>
+            <span class="gauge" id="gauge" aria-hidden="true"><span class="gauge__fill" id="gaugeFill"></span></span>
           </div>
           <div class="fact">
-            <dt class="fact__k">Muestra</dt>
+            <dt class="fact__k">Archivo</dt>
             <dd class="fact__v" id="resultFile">—</dd>
           </div>
           <div class="fact">
@@ -167,8 +185,17 @@
             <span class="label__value" id="totalArea">—</span>
             <span class="label__unit">cm²</span>
           </p>
-          <p class="label__caption">Área foliar total detectada</p>
+          <p class="label__caption" id="resultCaption">Área foliar total detectada</p>
         </div>
+      </div>
+
+      <div class="notice notice--warn" id="noLeaves" hidden>
+        <svg class="notice__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 8v5" stroke-linecap="round" />
+          <path d="M12 15.6h.01" stroke-linecap="round" />
+        </svg>
+        <span>No se encontró ninguna hoja en esta fotografía. Puede ser que la muestra esté muy lejos, muy oscura o fuera del marco. Revisa el encuadre e inténtalo otra vez.</span>
       </div>
 
       <div class="leaves" id="leafDetail" hidden>
@@ -181,7 +208,7 @@
           <figcaption class="plate__tag">Original</figcaption>
         </figure>
         <figure class="plate" id="plateMask">
-          <figcaption class="plate__tag">Máscara · Hoja N</figcaption>
+          <figcaption class="plate__tag">Imagen procesada</figcaption>
         </figure>
       </div>
 
@@ -242,7 +269,7 @@
           <p class="modal__lead" id="tutorialLead">Cuatro pasos. El primero es el que decide si el resultado es correcto.</p>
         </div>
         <button type="button" class="modal__close" data-close aria-label="Cerrar el tutorial">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
             <path d="m6 6 12 12M18 6 6 18" />
           </svg>
         </button>
@@ -252,17 +279,17 @@
         <ol class="steps">
           <li class="step">
             <div class="step__fig" aria-hidden="true">
-              <svg viewBox="0 0 92 108" fill="none" stroke="currentColor" stroke-width="1.4">
-                <rect x="21" y="5" width="50" height="68" stroke-dasharray="4 4" stroke="#9cc3aa" />
-                <path d="M21 5h12M21 5v12M71 5H59M71 5v12M21 73h12M21 73V61M71 73H59M71 73V61" stroke="#2e7d51" stroke-width="1.8" />
-                <path d="M21 81h50M21 78v6M71 78v6" stroke="#9cc3aa" />
-                <path d="M21 14h50M18 5v68" stroke="#9cc3aa" />
-                <text x="46" y="93" text-anchor="middle" font-family="monospace" font-size="8" fill="#1d5236">21,8 cm</text>
-                <text x="12" y="44" text-anchor="middle" font-family="monospace" font-size="8" fill="#1d5236">30</text>
+              <svg viewBox="0 0 92 108" fill="none" stroke-width="1.4">
+                <rect class="fig-frame fig-frame--dash" x="21" y="5" width="50" height="68" />
+                <path class="fig-accent" d="M21 5h12M21 5v12M71 5H59M71 5v12M21 73h12M21 73V61M71 73H59M71 73V61" stroke-width="1.8" />
+                <path class="fig-rule" d="M21 81h50M21 78v6M71 78v6" />
+                <path class="fig-rule" d="M21 14h50M18 5v68" />
+                <text class="fig-dim" x="46" y="94" text-anchor="middle">21,8 cm</text>
+                <text class="fig-dim" x="11" y="44" text-anchor="middle">30</text>
               </svg>
             </div>
             <div>
-              <h3 class="step__title"><span class="step__num">1</span>Encuadra la muestra dentro del marco</h3>
+              <h3 class="step__title"><span class="step__num">1</span> Encuadra la muestra dentro del marco</h3>
               <p class="step__text">La fotografía debe mostrar el marco de <strong>21,8 cm de ancho por 30 cm de alto</strong>, con la planta apoyada sobre una base clara.</p>
               <p class="step__text">Ese marco es lo que permite pasar de píxeles a centímetros cuadrados. Es el paso que no se puede saltar.</p>
             </div>
@@ -270,59 +297,59 @@
 
           <li class="step">
             <div class="step__fig" aria-hidden="true">
-              <svg viewBox="0 0 92 108" fill="none" stroke="currentColor" stroke-width="1.4">
-                <rect x="8" y="30" width="76" height="48" rx="3" stroke="#c3dccb" />
-                <path d="M46 12v26m0 0-8-8m8 8 8-8" stroke="#2e7d51" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-                <rect x="34" y="46" width="24" height="30" rx="2" stroke="#2e7d51" />
-                <path d="m38 68 6-6 5 5 4-4 5 5" stroke="#2e7d51" stroke-linecap="round" stroke-linejoin="round" />
-                <circle cx="42" cy="52" r="2.4" stroke="#2e7d51" />
-                <path d="M8 88h76" stroke="#c3dccb" />
+              <svg viewBox="0 0 92 108" fill="none" stroke-width="1.4">
+                <rect class="fig-body" x="8" y="30" width="76" height="48" rx="3" />
+                <path class="fig-accent" d="M46 12v26m0 0-8-8m8 8 8-8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
+                <rect class="fig-accent" x="34" y="46" width="24" height="30" rx="2" />
+                <path class="fig-accent" d="m38 68 6-6 5 5 4-4 5 5" stroke-linecap="round" stroke-linejoin="round" />
+                <circle class="fig-accent" cx="42" cy="52" r="2.4" />
+                <path class="fig-body" d="M8 88h76" />
               </svg>
             </div>
             <div>
-              <h3 class="step__title"><span class="step__num">2</span>Sube la fotografía</h3>
+              <h3 class="step__title"><span class="step__num">2</span> Sube la fotografía</h3>
               <p class="step__text">Arrastra el archivo hasta la ventana o haz clic en ella para buscarlo en el computador. Se aceptan JPG y PNG de hasta 50 MB.</p>
-              <p class="step__text">Al elegirla, el marco se ajusta sobre la miniatura: revisa que las esquinas coincidan antes de continuar.</p>
+              <p class="step__text">Al elegirla, el marco aparece sobre la miniatura. Si la foto no lo llena, sobra fondo y las esquinas quedan fuera: vuelve a encuadrar antes de continuar.</p>
             </div>
           </li>
 
           <li class="step">
             <div class="step__fig" aria-hidden="true">
-              <svg viewBox="0 0 92 108" fill="none" stroke="currentColor" stroke-width="1.4">
-                <rect x="10" y="20" width="72" height="68" rx="3" stroke="#c3dccb" />
-                <rect x="24" y="34" width="44" height="18" rx="3" fill="#2e7d51" stroke="#2e7d51" />
-                <text x="46" y="47" text-anchor="middle" font-family="monospace" font-size="9" fill="#ffffff">ANALIZAR</text>
-                <circle cx="34" cy="70" r="3.4" fill="#2e7d51" />
-                <path d="M43 70h26" stroke="#9cc3aa" stroke-linecap="round" stroke-dasharray="3 3" />
-                <path d="M32 66.5a5 5 0 0 1 6 5" stroke="#2e7d51" stroke-linecap="round" opacity=".5" />
+              <svg viewBox="0 0 92 108" fill="none" stroke-width="1.4">
+                <rect class="fig-body" x="10" y="20" width="72" height="68" rx="3" />
+                <rect class="fig-solid" x="24" y="34" width="44" height="18" rx="3" stroke="none" />
+                <text class="fig-key" x="46" y="47" text-anchor="middle">ANALIZAR</text>
+                <circle class="fig-solid" cx="34" cy="70" r="3.4" stroke="none" />
+                <path class="fig-rule" d="M43 70h26" stroke-linecap="round" stroke-dasharray="3 3" />
+                <path class="fig-accent" d="M32 66.5a5 5 0 0 1 6 5" stroke-linecap="round" opacity=".5" />
               </svg>
             </div>
             <div>
-              <h3 class="step__title"><span class="step__num">3</span>Pulsa Analizar</h3>
-              <p class="step__text">El modelo YOLO11 busca cada hoja en la imagen y dibuja su contorno. Tarda algunos segundos.</p>
-              <p class="step__text">Puedes dejar esta ventana abierta: el análisis continúa igual.</p>
+              <h3 class="step__title"><span class="step__num">3</span> Pulsa Analizar</h3>
+              <p class="step__text">El modelo busca cada hoja en la imagen y dibuja su contorno. Tarda algunos segundos, según el equipo.</p>
+              <p class="step__text">Puedes dejar esta ventana abierta: el análisis continúa igual, y si se demora mucho puedes cancelarlo.</p>
             </div>
           </li>
 
           <li class="step">
             <div class="step__fig" aria-hidden="true">
-              <svg viewBox="0 0 92 108" fill="none" stroke="currentColor" stroke-width="1.4">
-                <rect x="8" y="16" width="76" height="46" rx="3" stroke="#c3dccb" />
-                <path d="M70 16v46" stroke="#c3dccb" />
-                <text x="22" y="42" text-anchor="end" font-family="monospace" font-size="15" font-weight="600" fill="#123020">842,5</text>
-                <text x="74" y="42" text-anchor="middle" font-family="monospace" font-size="8" fill="#256742">cm²</text>
-                <rect x="16" y="72" width="60" height="5" rx="2.5" fill="#eaf5ee" />
-                <rect x="16" y="72" width="46" height="5" rx="2.5" fill="#2e7d51" />
-                <rect x="16" y="84" width="60" height="5" rx="2.5" fill="#eaf5ee" />
-                <rect x="16" y="84" width="24" height="5" rx="2.5" fill="#2e7d51" />
-                <rect x="16" y="96" width="60" height="5" rx="2.5" fill="#eaf5ee" />
-                <rect x="16" y="96" width="11" height="5" rx="2.5" fill="#2e7d51" />
+              <svg viewBox="0 0 92 108" fill="none" stroke-width="1.4">
+                <rect class="fig-body" x="8" y="16" width="76" height="46" rx="3" />
+                <path class="fig-body" d="M70 16v46" />
+                <text class="fig-num" x="22" y="42" text-anchor="end">842,5</text>
+                <text class="fig-unit" x="75" y="42" text-anchor="middle">cm²</text>
+                <rect class="fig-track" x="16" y="72" width="60" height="5" rx="2.5" stroke="none" />
+                <rect class="fig-solid" x="16" y="72" width="46" height="5" rx="2.5" stroke="none" />
+                <rect class="fig-track" x="16" y="84" width="60" height="5" rx="2.5" stroke="none" />
+                <rect class="fig-solid" x="16" y="84" width="24" height="5" rx="2.5" stroke="none" />
+                <rect class="fig-track" x="16" y="96" width="60" height="5" rx="2.5" stroke="none" />
+                <rect class="fig-solid" x="16" y="96" width="11" height="5" rx="2.5" stroke="none" />
               </svg>
             </div>
             <div>
-              <h3 class="step__title"><span class="step__num">4</span>Lee el resultado</h3>
-              <p class="step__text">El área total aparece en centímetros cuadrados, con el detalle hoja por hoja y la máscara que muestra dónde se midió.</p>
-              <p class="step__text">Descarga la imagen procesada si la necesitas para el informe. Todo análisis queda guardado en el historial.</p>
+              <h3 class="step__title"><span class="step__num">4</span> Lee el resultado</h3>
+              <p class="step__text">El área total aparece en centímetros cuadrados, con el detalle hoja por hoja y la imagen procesada, que muestra el contorno y dónde se midió cada hoja.</p>
+              <p class="step__text">Descarga esa imagen si la necesitas para el informe. Todo análisis queda guardado en el historial.</p>
             </div>
           </li>
         </ol>
@@ -353,7 +380,7 @@
           <h2 class="modal__title" id="confirmTitle">¿Borrar todo el historial?</h2>
         </div>
         <button type="button" class="modal__close" data-close aria-label="Cerrar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
             <path d="m6 6 12 12M18 6 6 18" />
           </svg>
         </button>
@@ -372,11 +399,13 @@
   </div>
 
   <!-- ============ Procesando ============ -->
-  <div class="veil" id="loaderOverlay" role="status" aria-live="polite" hidden>
-    <div class="veil__panel">
-      <p class="veil__title" id="loaderTitle">Analizando la fotografía…</p>
-      <div class="veil__ring" aria-hidden="true"></div>
-      <p class="veil__note">El modelo está contando y midiendo cada hoja.</p>
+  <div class="veil" id="loaderOverlay" hidden>
+    <div class="veil__panel" id="veilPanel" tabindex="-1">
+      <div role="status" aria-live="polite">
+        <p class="veil__title" id="loaderTitle">Analizando la fotografía…</p>
+        <div class="veil__ring" aria-hidden="true"></div>
+        <p class="veil__note">El modelo está contando y midiendo cada hoja.</p>
+      </div>
       <button type="button" class="btn btn-quiet" id="cancelAnalyze">Cancelar análisis</button>
     </div>
   </div>

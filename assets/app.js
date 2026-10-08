@@ -10,6 +10,8 @@ const API = {
 
 /* Marco de captura usado por el modelo: 21,8 cm de ancho x 30 cm de alto
    (constantes ANCHO_FISICO_CM y ALTO_FISICO_CM en src/calcular_area.py). */
+const MARCO_ANCHO = 21.8;
+const MARCO_ALTO = 30;
 const MARCO_CM2 = 654;
 
 const TIPOS_ACEPTADOS = ["image/jpeg", "image/jpg", "image/png"];
@@ -26,10 +28,10 @@ let control = null;
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
 
-/* El manifiesto de fuentes se autohospeda, así que el navegador no puede
-   knowing de antemano que hacen falta; se avisa al empezar a cargar y se
-   retira en cuanto el texto está listo. Sin esto la primera pintura sale con
-   la tipografía de reserva. */
+/* El manifiesto de fuentes se autohospeda, así que el navegador no puede saber
+   de antemano que hacen falta; se avisa al empezar a cargar y se retira en
+   cuanto el texto está listo. Sin esto la primera pintura sale con la
+   tipografía de reserva. */
 const fuentes = document.fonts;
 let avisoFuentes = null;
 
@@ -57,6 +59,14 @@ const num = (valor, decimales = 2) =>
 
 const entero = (valor) => Number(valor).toLocaleString("es-CL");
 
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+const dosCifras = (n) => String(n).padStart(2, "0");
+
+const marcarHora = (fecha) => `${dosCifras(fecha.getHours())}:${dosCifras(fecha.getMinutes())}`;
+
+const marcarFecha = (fecha) => `${fecha.getDate()} ${MESES[fecha.getMonth()]} ${fecha.getFullYear()}`;
+
 const mostrar = (el, visible) => {
   if (!el) return;
   el.hidden = !visible;
@@ -71,14 +81,18 @@ const ventanaCarga = $("#uploadZone");
 const inputArchivo = $("#fileInput");
 const zonaPrompt = $("#uploadPrompt");
 const zonaCargada = $("#uploadPreview");
+const shell = $("#shell");
+const enlaceSalto = $(".skip-link");
 const nombrePrevia = $("#previewName");
 const escenario = $("#stage");
+const avisoEncuadre = $("#frameWarn");
 const btnQuitar = $("#removeFile");
 const acciones = $("#actions");
 const btnAnalizar = $("#analyzeBtn");
 const etiquetaAnalizar = btnAnalizar.querySelector(".btn__label");
 const btnCancelar = $("#clearSelectionBtn");
 const velo = $("#loaderOverlay");
+const panelVelo = $("#veilPanel");
 const btnCancelarAnalisis = $("#cancelAnalyze");
 const cajaError = $("#errorBox");
 const textoError = $("#errorText");
@@ -94,6 +108,8 @@ const campoCobertura = $("#coverage");
 const barraCobertura = $("#gaugeFill");
 const campoArchivo = $("#resultFile");
 const campoCuando = $("#resultWhen");
+const campoLeyenda = $("#resultCaption");
+const avisoSinHojas = $("#noLeaves");
 const bloqueHojas = $("#leafDetail");
 const listaHojas = $("#leafList");
 const bloqueComparacion = $("#comparison");
@@ -118,6 +134,8 @@ function marcarPaso(n) {
     const i = Number(paso.dataset.step);
     paso.classList.toggle("is-current", i === n);
     paso.classList.toggle("is-done", i < n);
+    if (i === n) paso.setAttribute("aria-current", "step");
+    else paso.removeAttribute("aria-current");
   });
 }
 
@@ -134,7 +152,7 @@ const sincronizarBloqueo = () => {
   document.documentElement.classList.toggle("is-locked", alguno);
 };
 
-function crearDialogo(el, resultadoPorDefecto = false) {
+function crearDialogo(el, resultadoPorDefecto = false, focoInicial = "", respaldo = "") {
   const dlg = { el, ultimoFoco: null, respuesta: resultadoPorDefecto };
 
   dlg.abrir = () => {
@@ -145,7 +163,12 @@ function crearDialogo(el, resultadoPorDefecto = false) {
     sincronizarBloqueo();
     el.addEventListener("keydown", alTeclear);
     requestAnimationFrame(() => el.classList.add("is-open"));
-    const inicio = el.querySelector(".modal__close") || el.querySelector(FOCUABLES);
+    // En un diálogo destructivo el foco no parte del control más cercano a la
+    // X: desde ahí, Shift+Tab lleva al botón que borra.
+    const inicio =
+      (focoInicial && el.querySelector(focoInicial)) ||
+      el.querySelector(".modal__close") ||
+      el.querySelector(FOCUABLES);
     if (inicio) inicio.focus();
   };
 
@@ -157,7 +180,18 @@ function crearDialogo(el, resultadoPorDefecto = false) {
     window.setTimeout(() => {
       el.hidden = true;
       sincronizarBloqueo();
-      if (dlg.ultimoFoco && document.contains(dlg.ultimoFoco)) dlg.ultimoFoco.focus();
+      /* Cuando el diálogo se abrió solo, el foco previo era <body>: devolverlo
+         allí deja al teclado sin punto de partida. Se cae al botón que lo abre,
+         que es adonde volvería el operador de todas formas. */
+      const destino =
+        dlg.ultimoFoco && dlg.ultimoFoco !== document.body && document.contains(dlg.ultimoFoco)
+          ? dlg.ultimoFoco
+          : $(respaldo);
+      if (destino) destino.focus();
+      /* Avisa a quien espera el cierre (p. ej. la confirmación de borrar el
+         historial) recién cuando la animación terminó y el diálogo ya no se ve.
+         Se emite en cada cierre, no solo la primera vez. */
+      el.dispatchEvent(new Event("cerrado"));
     }, 200);
   };
 
@@ -189,8 +223,8 @@ function crearDialogo(el, resultadoPorDefecto = false) {
   return dlg;
 }
 
-const tutorial = crearDialogo(modalTutorial, true);
-const confirmar = crearDialogo(modalConfirmar, false);
+const tutorial = crearDialogo(modalTutorial, true, "", "#helpBtn");
+const confirmar = crearDialogo(modalConfirmar, false, "#confirmCancel", "#clearHistoryBtn");
 
 function preguntar(mensaje, textoOk) {
   $("#confirmText").textContent = mensaje;
@@ -206,18 +240,35 @@ function preguntar(mensaje, textoOk) {
   });
 }
 
-// El diálogo de confirmación avisa cuando termina de cerrarse, para no
-// resolver la promesa antes de que la animación termine.
-new MutationObserver((_, obs) => {
-  if (!modalConfirmar.hidden) return;
-  obs.disconnect();
-  modalConfirmar.dispatchEvent(new Event("cerrado"));
-}).observe(modalConfirmar, { attributes: true, attributeFilter: ["hidden"] });
-
-$("#helpBtn").addEventListener("click", () => tutorial.abrir());
-$("#tutorialOk").addEventListener("click", () => {
-  localStorage.setItem(CLAVE_TUTORIAL, casillaNoMostrar.checked ? "off" : "done");
+$("#helpBtn").addEventListener("click", () => {
+  // La casilla refleja la última vez que se guardó la preferencia, no la de ahora.
+  casillaNoMostrar.checked = leerPreferencia() === "off";
+  tutorial.abrir();
 });
+
+$("#tutorialOk").addEventListener("click", () => {
+  guardarPreferencia(casillaNoMostrar.checked ? "off" : "done");
+});
+
+/* En navegación privada, o con el almacenamiento bloqueado, localStorage lanza.
+   Sin este abrigo, guardar la preferencia impediría cerrar el tutorial y leerla
+   mataría el arranque. Perder la preferencia no es motivo para romper la app. */
+function leerPreferencia() {
+  try {
+    return window.localStorage.getItem(CLAVE_TUTORIAL);
+  } catch {
+    return null;
+  }
+}
+
+function guardarPreferencia(valor) {
+  try {
+    window.localStorage.setItem(CLAVE_TUTORIAL, valor);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // ============================== SELECCIÓN DE ARCHIVO ==============================
 
@@ -246,7 +297,9 @@ function reiniciarFoto() {
   mostrar(zonaPrompt, true);
   mostrar(zonaCargada, false);
   mostrar(acciones, false);
-  escenario.classList.remove("is-scanning");
+  ventanaCarga.classList.remove("is-loaded");
+  escenario.classList.remove("is-misfit");
+  mostrar(avisoEncuadre, false);
   limpiarError();
 }
 
@@ -256,6 +309,7 @@ function reiniciarTodo() {
   mostrar(bloqueHojas, false);
   mostrar(bloqueComparacion, false);
   mostrar(bloqueDescarga, false);
+  mostrar(avisoSinHojas, false);
 }
 
 function reiniciarAnimacionRegistro() {
@@ -286,15 +340,55 @@ function prepararPrevia(archivo) {
   mostrar(zonaPrompt, false);
   mostrar(zonaCargada, true);
   mostrar(acciones, true);
+  ventanaCarga.classList.add("is-loaded");
   btnAnalizar.disabled = false;
+  comprobarEncuadre(imagen);
   reiniciarAnimacionRegistro();
   limpiarError();
   marcarPaso(2);
   estado("Fotografía lista para analizar");
 }
 
+/* El encuadre es el único error que arruina el resultado sin avisar. Con
+   object-fit: contain el sobrante ya se ve, pero un aviso escrito es lo que de
+   verdad detiene a quien no conoce la técnica. */
+const TOLERANCIA_ENCUADRE = 0.06;
+
+function comprobarEncuadre(imagen) {
+  const revisar = () => {
+    const ancho = imagen.naturalWidth;
+    const alto = imagen.naturalHeight;
+    escenario.classList.remove("is-misfit");
+    avisoEncuadre.hidden = true;
+
+    if (!ancho || !alto) return;
+
+    const desvío = Math.abs(ancho / alto - MARCO_ANCHO / MARCO_ALTO) / (MARCO_ANCHO / MARCO_ALTO);
+    if (desvío <= TOLERANCIA_ENCUADRE) return;
+
+    escenario.classList.add("is-misfit");
+    avisoEncuadre.hidden = false;
+    avisoEncuadre.textContent =
+      ancho > alto
+        ? "Esta foto está horizontal y el marco es vertical. El área en cm² puede salir mal."
+        : "Esta foto no tiene la proporción del marco (21,8 × 30). Si sobran bordes, vuelve a encuadrar.";
+  };
+
+  if (imagen.complete) revisar();
+  else imagen.addEventListener("load", revisar, { once: true });
+}
+
 function recibirArchivo(archivo) {
   if (!archivo) return;
+  // Con el análisis en marcha, cambiar de fotografía dejaría la foto nueva junto
+  // al resultado de la anterior.
+  if (analizando) {
+    mostrarError(
+      "Hay un análisis en marcha.",
+      "Espera a que termine o cancálalo antes de cambiar la fotografía."
+    );
+    return;
+  }
   if (!TIPOS_ACEPTADOS.includes(archivo.type)) {
     mostrarError(
       "Ese archivo no es una imagen.",
@@ -305,7 +399,7 @@ function recibirArchivo(archivo) {
   if (archivo.size > MAX_BYTES) {
     mostrarError(
       "La fotografía pesa demasiado.",
-      "El límite es 50 MB. Baja la resolución a 1920 × 1080 o más e inténtalo de nuevo."
+      "El límite es 50 MB. Baja la resolución o recorta la fotografía e inténtalo de nuevo."
     );
     return;
   }
@@ -332,24 +426,36 @@ ventanaCarga.addEventListener("drop", (e) => {
   recibirArchivo(e.dataTransfer?.files?.[0]);
 });
 
+// Soltar el archivo fuera de la ventana no debe hacer que el navegador navegue
+// hasta él: se acepta la caída en cualquier parte de la página.
+["dragover", "drop"].forEach((evt) => {
+  window.addEventListener(evt, (e) => {
+    if (e.target.closest("#uploadZone")) return;
+    e.preventDefault();
+  });
+});
+
 inputArchivo.addEventListener("change", (e) => {
   const archivo = e.target.files?.[0];
   e.target.value = "";
   if (archivo) recibirArchivo(archivo);
 });
 
-btnQuitar.addEventListener("click", () => {
+function soltarFoto() {
   reiniciarFoto();
   marcarPaso(1);
-  estado("Sin fotografía");
+  // Si queda un resultado anterior a la vista, el riel no puede decir solo
+  // "Sin fotografía": un número suelto sin contexto engaña a quien lo lea.
+  estado(
+    seccionResultado.hidden
+      ? "Sin fotografía"
+      : "Sin fotografía · el resultado de abajo es del análisis anterior"
+  );
   inputArchivo.focus();
-});
+}
 
-btnCancelar.addEventListener("click", () => {
-  reiniciarFoto();
-  marcarPaso(1);
-  estado("Sin fotografía");
-});
+btnQuitar.addEventListener("click", soltarFoto);
+btnCancelar.addEventListener("click", soltarFoto);
 
 // ============================== ANÁLISIS ==============================
 
@@ -359,10 +465,14 @@ btnAnalizar.addEventListener("click", async () => {
   analizando = true;
   control = new AbortController();
   limpiarError();
+  mostrar(velo, true);
+  // El velo tapa la página: sin esto el teclado sigue recorriendo controles que
+  // parecen activos detrás de una superficie que no responde.
+  shell.inert = true;
+  enlaceSalto.inert = true;
+  panelVelo.focus();
   btnAnalizar.disabled = true;
   etiquetaAnalizar.textContent = "Analizando…";
-  mostrar(velo, true);
-  escenario.classList.add("is-scanning");
   ventanaCarga.setAttribute("aria-busy", "true");
   marcarPaso(2);
   estado("Analizando la fotografía…", "busy");
@@ -396,30 +506,56 @@ btnAnalizar.addEventListener("click", async () => {
     }
     // La fotografía sigue cargada: el operador reintenta desde el paso 2.
     marcarPaso(2);
-    const detalle = err.message || "";
-    if (/modelo/i.test(detalle)) {
-      mostrarError(
-        "El sistema no está listo para analizar.",
-        "El modelo no se pudo cargar en el servidor. Avisa a quien administra la aplicación."
-      );
-    } else if (/conexi|network|fetch/i.test(detalle)) {
-      mostrarError(
-        "No se pudo conectar con el servidor.",
-        "Comprueba que la aplicación siga encendida e inténtalo otra vez."
-      );
-    } else {
-      mostrarError(detalle || "No fue posible procesar la fotografía.", "Inténtalo con otra imagen.");
-    }
+    mostrarError(...mensajeDeError(err, "No fue posible procesar la fotografía."));
   } finally {
     analizando = false;
     control = null;
+    shell.inert = false;
+    enlaceSalto.inert = false;
+    ventanaCarga.removeAttribute("aria-busy");
+    mostrar(velo, false);
     btnAnalizar.disabled = false;
     etiquetaAnalizar.textContent = "Analizar";
-    mostrar(velo, false);
-    escenario.classList.remove("is-scanning");
-    ventanaCarga.removeAttribute("aria-busy");
+    // El velo se llevó el foco: se lo devuelve a quien puede reintentar.
+    if (document.activeElement === document.body || !document.contains(document.activeElement)) {
+      btnAnalizar.focus();
+    }
   }
 });
+
+/* El detalle del backend puede traer rutas del servidor o excepciones de
+   Python. Eso no se le muestra a quien mide plantas: se clasifica y se dice qué
+   hacer. El texto crudo queda solo en la consola, para quien administra. */
+function mensajeDeError(err, porDefecto) {
+  const detalle = err?.message || "";
+  console.error("Error de análisis:", detalle);
+
+  if (/timeout|timed out|demora/i.test(detalle)) {
+    return [
+      "El análisis tardó demasiado.",
+      "Cierra otras ventanas del equipo e inténtalo de nuevo."
+    ];
+  }
+  if (/modelo|weights|checkpoint/i.test(detalle)) {
+    return [
+      "El sistema no está listo para analizar.",
+      "El modelo no se pudo cargar en el servidor. Avisa a quien administra la aplicación."
+    ];
+  }
+  if (/conexi|network|fetch|failed to fetch/i.test(detalle)) {
+    return [
+      "No se pudo conectar con el servidor.",
+      "Comprueba que la aplicación siga encendida e inténtalo otra vez."
+    ];
+  }
+  if (/permiso|permission denied|errno 13|no such file|espacio/i.test(detalle)) {
+    return [
+      "El servidor no pudo guardar la fotografía.",
+      "Es un problema del equipo que administra la aplicación, no de tu foto."
+    ];
+  }
+  return [porDefecto, "Inténtalo con otra fotografía."];
+}
 
 btnCancelarAnalisis.addEventListener("click", () => {
   if (analizando) control?.abort();
@@ -432,25 +568,38 @@ function mostrarResultado(datos) {
   campoHojas.textContent = entero(hojas);
   campoArea.textContent = num(area);
 
-  const cobertura = Math.min(100, Math.max(0, (area / MARCO_CM2) * 100));
-  campoCobertura.textContent = `${num(cobertura, 1)} %`;
+  /* Una cobertura sobre 100 % no es un dato: es la evidencia de que la muestra
+     no cabe en el marco. Mostrarla como "100,0 %" escondería la prueba, así que
+     el número se muestra tal cual y la barra cambia de color. */
+  const coberturaReal = (area / MARCO_CM2) * 100;
+  const excede = coberturaReal > 100;
+  const cobertura = Math.min(100, Math.max(0, coberturaReal));
+  campoCobertura.textContent = `${num(coberturaReal, 1)} %`;
   barraCobertura.style.transform = `scaleX(${cobertura / 100})`;
+  barraCobertura.parentElement.classList.toggle("is-over", excede);
+
+  // Cero hojas no es un resultado de 0 cm²: es un análisis que no encontró nada.
+  const sinHojas = hojas === 0 || area === 0;
+  campoLeyenda.textContent = sinHojas
+    ? "No se detectó ninguna hoja en esta fotografía"
+    : excede
+      ? "Área foliar total, mayor que el marco: revisa el encuadre"
+      : "Área foliar total detectada";
 
   campoArchivo.textContent = datos.original_filename || "—";
-  campoCuando.textContent = new Date().toLocaleTimeString("es-CL", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  // Hora y fecha: en una tanda de muchas muestras, la hora sola no dice de qué
+  // día era el número. El formato se escribe a mano para no depender de cómo
+  // el navegador localize los meses.
+  campoCuando.textContent = `${marcarFecha(new Date())} · ${marcarHora(new Date())}`;
 
-  // Detalle por hoja: el orden del modelo se conserva porque la máscara
-  // rotula cada contorno con su número.
+  // Detalle por hoja: el orden del modelo se conserva porque la imagen
+  // procesada rotula cada contorno con su número.
   listaHojas.innerHTML = "";
   const detalle = Array.isArray(datos.per_leaf) ? datos.per_leaf : [];
   const mayor = detalle.reduce((max, h) => Math.max(max, Number(h.area_cm2) || 0), 0);
 
   if (detalle.length) {
-    detalle.forEach((hoja) => {
+    detalle.forEach((hoja, i) => {
       const valor = Number(hoja.area_cm2) || 0;
       const li = document.createElement("li");
       li.className = "leaf";
@@ -464,6 +613,7 @@ function mostrarResultado(datos) {
       const relleno = document.createElement("span");
       relleno.className = "leaf__fill";
       relleno.style.width = mayor > 0 ? `${(valor / mayor) * 100}%` : "0%";
+      relleno.style.setProperty("--i", String(i));
       barra.append(relleno);
 
       const areaHoja = document.createElement("span");
@@ -478,10 +628,20 @@ function mostrarResultado(datos) {
     mostrar(bloqueHojas, false);
   }
 
+  if (sinHojas) {
+    avisoSinHojas.hidden = false;
+  } else {
+    avisoSinHojas.hidden = true;
+  }
+
   // Las imágenes se insertan al llegar el resultado: en el marcado inicial no
   // hay <img> sin src, que el navegador mostraría roto.
   montarPlaca(placaOriginal, datos.original_url, `Fotografía original de ${datos.original_filename}`);
-  montarPlaca(placaMascara, datos.mask_url, "Máscara de segmentación con el contorno de cada hoja detectada");
+  montarPlaca(
+    placaMascara,
+    datos.mask_url,
+    "Imagen procesada: contorno de cada hoja detectada sobre la fotografía"
+  );
 
   btnDescarga.href = datos.download_url;
   btnDescarga.download = `analisis_${datos.original_filename}`;
@@ -492,6 +652,9 @@ function mostrarResultado(datos) {
 }
 
 function montarPlaca(placa, url, alt) {
+  // Reemplaza la imagen anterior: sin esto, cada análisis añade una <img> nueva
+  // encima de la del análisis previo y las placas muestran dos imágenes.
+  placa.querySelectorAll("img").forEach((vieja) => vieja.remove());
   const imagen = document.createElement("img");
   imagen.src = url;
   imagen.alt = alt;
@@ -509,9 +672,10 @@ async function cargarGaleria() {
     pintarGaleria(datos.items || []);
   } catch (err) {
     console.error("Galería:", err);
-    notaGaleria.textContent = "No se pudo leer el historial.";
+    // Falló la lectura: no se afirma que no haya análisis, que es otra cosa.
+    notaGaleria.textContent = "No se pudo leer el historial. Recarga la página para intentarlo de nuevo.";
     mostrar(galeriaGrid, false);
-    mostrar(galeriaVacia, true);
+    mostrar(galeriaVacia, false);
   }
 }
 
@@ -544,13 +708,18 @@ function pintarGaleria(items) {
 
     const imagen = document.createElement("img");
     imagen.src = item.url;
-    imagen.alt = `Máscara de segmentación de ${item.original_name}`;
+    imagen.alt = `Imagen procesada de ${item.original_name}: contornos de las hojas detectadas`;
     imagen.loading = "lazy";
+    imagen.decoding = "async";
 
     const pie = document.createElement("figcaption");
     pie.textContent = item.original_name;
 
-    enlace.append(imagen, pie);
+    // figcaption solo es válido como hijo de figure, y el enlace es interactivo:
+    // la figura va dentro del enlace, no al revés.
+    const figura = document.createElement("figure");
+    figura.append(imagen, pie);
+    enlace.append(figura);
     li.append(enlace);
     galeriaGrid.appendChild(li);
   });
@@ -580,7 +749,7 @@ btnLimpiar.addEventListener("click", async () => {
 
 document.addEventListener("DOMContentLoaded", () => {
   cargarGaleria();
-  if (!localStorage.getItem(CLAVE_TUTORIAL)) {
+  if (!leerPreferencia()) {
     window.setTimeout(() => tutorial.abrir(), 350);
   }
 });

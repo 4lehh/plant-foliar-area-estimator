@@ -41,6 +41,14 @@
   --green-700: #1d5236;
   --green-900: #123020;
 
+  /* Único color fuera del verde: dato imposible ("la muestra no cabe en el
+     marco"). Nunca se usa para acciones. */
+  --warn-600: #9a5410;
+
+  /* Tinta sobre el verde de acción: blanca en claro, oscura en oscuro, donde
+     el acento es un verde claro. */
+  --on-accent: #ffffff;
+
   /* Tinta */
   --ink-900: #101a14;
   --ink-600: #45574c;
@@ -53,14 +61,15 @@
   /* Lavado de borde (verde claro en los bordes de la página) */
   --edge-wash: rgba(168, 214, 183, 0.5);
 
-  /* Medidas */
-  --frame-w-cm: 21.8;
-  --frame-h-cm: 30;
+  /* Medidas del marco de captura, en centímetros. Las mismas que usa el modelo
+     en src/calcular_area.py: la proporción sale de aquí, no de un número suelto
+     repetido en cuatro sitios. */
+  --marco-w: 21.8;
+  --marco-h: 30;
 
   /* Trazos que dependen del tema (el marco de captura) */
   --frame-line: rgba(46, 125, 81, 0.35);
   --frame-line-soft: rgba(46, 125, 81, 0.14);
-  --scan-tint: rgba(46, 125, 81, 0.22);
 
   /* Sombras: desplazamiento y desenfoque reales, tinte casi neutro */
   --shadow-plate: 0 18px 44px -18px rgba(26, 32, 29, 0.26), 0 4px 12px -6px rgba(26, 32, 29, 0.12);
@@ -100,6 +109,10 @@
     --green-700: #a2e2c1;
     --green-900: #ddf3e6;
 
+    --warn-600: #e2a45c;
+
+    --on-accent: #0d1512;
+
     --ink-900: #e8f2ec;
     --ink-600: #adc3b6;
     --ink-500: #93ab9d;
@@ -111,7 +124,6 @@
 
     --frame-line: rgba(86, 196, 138, 0.45);
     --frame-line-soft: rgba(86, 196, 138, 0.2);
-    --scan-tint: rgba(86, 196, 138, 0.24);
 
     --shadow-plate: 0 18px 44px -18px rgba(0, 0, 0, 0.6), 0 4px 12px -6px rgba(0, 0, 0, 0.45);
     --shadow-pop: 0 28px 70px -16px rgba(0, 0, 0, 0.7), 0 10px 24px -12px rgba(0, 0, 0, 0.5);
@@ -209,6 +221,7 @@ html.is-locked { overflow: hidden; }
 }
 
 .brand__title {
+  text-wrap: balance;
   font-size: 1.6rem;
   font-weight: 700;
   letter-spacing: -0.025em;
@@ -278,15 +291,6 @@ html.is-locked { overflow: hidden; }
   .btn-danger:hover:not(:disabled) { background: #2a1a1a; }
 }
 
-.btn__spinner {
-  width: 15px;
-  height: 15px;
-  border: 2px solid rgba(255, 255, 255, 0.45);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.75s linear infinite;
-}
-
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------- Riel de estado ---------- */
@@ -320,7 +324,7 @@ html.is-locked { overflow: hidden; }
   border-radius: 50%;
   border: 1px solid var(--hairline-strong);
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--ink-600);
   transition: all var(--t-base);
 }
@@ -373,6 +377,7 @@ html.is-locked { overflow: hidden; }
 .section { margin-bottom: 2.75rem; }
 
 .section__title {
+  text-wrap: balance;
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.018em;
@@ -431,7 +436,7 @@ html.is-locked { overflow: hidden; }
   left: 50%;
   top: 50%;
   height: clamp(190px, 34vh, 290px);
-  aspect-ratio: 21.8 / 30;
+  aspect-ratio: var(--marco-w) / var(--marco-h);
   transform: translate(-50%, -50%);
   background-image:
     linear-gradient(to right, var(--mint-200) 1px, transparent 1px),
@@ -494,7 +499,7 @@ html.is-locked { overflow: hidden; }
 .frame {
   position: relative;
   height: clamp(190px, 34vh, 290px);
-  aspect-ratio: 21.8 / 30;
+  aspect-ratio: var(--marco-w) / var(--marco-h);
   border: 1px dashed var(--mint-400);
   border-radius: 3px;
 }
@@ -514,7 +519,7 @@ html.is-locked { overflow: hidden; }
 .frame__dim {
   position: absolute;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--green-700);
   white-space: nowrap;
 }
@@ -560,7 +565,7 @@ html.is-locked { overflow: hidden; }
   position: relative;
   z-index: 1;
   height: clamp(220px, 40vh, 380px);
-  aspect-ratio: 21.8 / 30;
+  aspect-ratio: var(--marco-w) / var(--marco-h);
   margin: 0 auto;
   border-radius: 4px;
   overflow: hidden;
@@ -587,8 +592,10 @@ html.is-locked { overflow: hidden; }
   transition: opacity var(--t-base);
 }
 
+/* Con la foto puesta, el sobrante se marca y el aviso escrito lo explica. Las
+   esquinas del marco se quedan siempre a plena opacidad: marcan el marco, y el
+   marco no cambia por culpa de la foto. */
 .stage.is-misfit .stage__outside { opacity: 1; }
-.stage.is-misfit .stage__corner { opacity: 0.35; }
 
 .stage__overlay {
   position: absolute;
@@ -630,10 +637,20 @@ html.is-locked { overflow: hidden; }
   background: rgba(13, 32, 22, 0.72);
   color: #f0f8f3;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Aviso de encuadre: la única vez que la interfaz usa el color de dato. */
+.stage__warn {
+  max-width: 40ch;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--warn-600);
 }
 
 .window__loaded {
@@ -733,16 +750,19 @@ html.is-locked { overflow: hidden; }
 
 .fact__v--num { font-size: 1.3rem; font-weight: 600; color: var(--green-700); }
 
+/* La pista necesita ser visible: a 1,1:1 sobre blanco una hoja del 4 % se
+   leía igual que una del 100 %. */
 .gauge {
   display: block;
   height: 6px;
   margin-top: 0.45rem;
   border-radius: 3px;
-  background: var(--mint-100);
+  background: var(--mint-200);
   overflow: hidden;
 }
 .gauge__fill {
   display: block;
+  width: 100%;
   height: 100%;
   border-radius: 3px;
   background: var(--green-500);
@@ -750,6 +770,21 @@ html.is-locked { overflow: hidden; }
   transform: scaleX(0);
   transition: transform 520ms var(--ease);
 }
+
+/* La barra nace a cero desde el ancho completo de la pista: el ancho real
+   nunca se anima, solo la escala. */
+.notice--warn {
+  margin-top: 1.15rem;
+  border-color: var(--warn-600);
+  background: transparent;
+  color: var(--ink-900);
+}
+
+.notice--warn .notice__icon { color: var(--warn-600); flex: none; }
+
+/* Pasado el marco la cobertura no puede ser 100 %: la muestra no cabe.
+   Es el único color que no es verde, y no es de acción, es de dato. */
+.gauge.is-over .gauge__fill { background: var(--warn-600); }
 
 .label__reading {
   padding-left: 2.25rem;
@@ -812,7 +847,7 @@ html.is-locked { overflow: hidden; }
   position: relative;
   height: 8px;
   border-radius: 4px;
-  background: var(--mint-100);
+  background: var(--mint-200);
   overflow: hidden;
 }
 
@@ -821,7 +856,9 @@ html.is-locked { overflow: hidden; }
   height: 100%;
   border-radius: 4px;
   background: var(--green-500);
-  animation: grow 520ms var(--ease) both;
+  animation: grow 420ms var(--ease) both;
+  /* Las barras entran en cascada: una sola entrada leída como secuencia */
+  animation-delay: calc(var(--i, 0) * 45ms);
   transform-origin: left center;
 }
 
@@ -860,10 +897,10 @@ html.is-locked { overflow: hidden; }
   left: 10px;
   padding: 0.3rem 0.62rem;
   border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface);
   border: 1px solid var(--hairline);
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--ink-600);
 }
 
@@ -897,20 +934,27 @@ html.is-locked { overflow: hidden; }
   transition: border-color var(--t-base), transform var(--t-base);
 }
 
-.shot:hover { border-color: var(--green-500); transform: translateY(-2px); }
+@media (hover: hover) {
+  .shot:hover { border-color: var(--green-500); transform: translateY(-2px); }
+}
+
+/* La miniatura del historial es un archivo, no el marco de captura: aquí sí se
+   recorta al marco para que la rejilla no quede con huecos desiguales. */
+.shot figure { display: block; }
 
 .shot img {
   width: 100%;
-  aspect-ratio: 21.8 / 30;
+  aspect-ratio: var(--marco-w) / var(--marco-h);
   object-fit: cover;
   background: var(--surface-sunk);
 }
 
 .shot figcaption {
+  display: block;
   padding: 0.5rem 0.7rem;
   border-top: 1px solid var(--hairline);
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--ink-600);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -936,8 +980,7 @@ html.is-locked { overflow: hidden; }
   margin-top: 2.5rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--hairline);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: var(--ink-500);
   display: flex;
   justify-content: space-between;
@@ -992,7 +1035,12 @@ html.is-locked { overflow: hidden; }
   background: var(--surface);
 }
 
-.modal__title { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.015em; }
+.modal__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
 .modal__lead { margin-top: 0.25rem; font-size: 0.88rem; color: var(--ink-600); }
 
 .modal__close {
@@ -1045,8 +1093,8 @@ html.is-locked { overflow: hidden; }
 
 .step {
   display: grid;
-  grid-template-columns: 92px 1fr;
-  gap: 1.1rem;
+  grid-template-columns: 118px 1fr;
+  gap: 1.15rem;
   align-items: start;
 }
 
@@ -1058,9 +1106,28 @@ html.is-locked { overflow: hidden; }
 }
 .step__fig svg { width: 100%; height: auto; display: block; }
 
+/* Las figuras del tutorial se pintan con tokens, no con hex: en tema oscuro los
+   hex claros del tema claro quedaban invisibles. */
+.fig-frame { stroke: var(--mint-400); }
+.fig-frame--dash { stroke-dasharray: 4 4; }
+.fig-body { stroke: var(--hairline-strong); }
+.fig-rule { stroke: var(--mint-400); }
+.fig-accent { stroke: var(--green-500); }
+.fig-solid { fill: var(--green-500); }
+.fig-track { fill: var(--mint-200); }
+.fig-dim { fill: var(--green-700); font-family: var(--font-mono); font-size: 11px; }
+.fig-num { fill: var(--green-900); font-family: var(--font-mono); font-size: 17px; font-weight: 600; }
+.fig-unit { fill: var(--green-700); font-family: var(--font-mono); font-size: 11px; }
+.fig-key {
+  fill: var(--on-accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
 .step__title { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.2rem; }
-.step__num { font-family: var(--font-mono); color: var(--green-600); margin-right: 0.35rem; }
-.step__text { font-size: 0.88rem; color: var(--ink-600); }
+.step__num { font-family: var(--font-mono); color: var(--green-700); margin-right: 0.35rem; }
+.step__text { font-size: 0.88rem; color: var(--ink-600); max-width: 68ch; }
 .step__text + .step__text { margin-top: 0.35rem; }
 
 .callout {
@@ -1069,6 +1136,7 @@ html.is-locked { overflow: hidden; }
   border: 1px solid var(--mint-200);
   border-radius: var(--r-md);
   background: var(--mint-50);
+  max-width: 68ch;
   font-size: 0.87rem;
   color: var(--green-700);
 }
@@ -1117,9 +1185,10 @@ html.is-locked { overflow: hidden; }
   .plate__tag { background: rgba(13, 21, 18, 0.9); }
   /* Sobre el verde claro del tema oscuro, el texto va en tinta oscura */
   .btn-primary,
-  .btn-primary:hover:not(:disabled) { color: #0d1512; }
-  .rail__step.is-current .rail__num { color: #0d1512; }
-  .skip-link { color: #0d1512; }
+  /* Sobre el verde claro del tema oscuro la tinta va oscura, no blanca. */
+  .skip-link,
+  .btn-primary:hover:not(:disabled),
+  .rail__step.is-current .rail__num { color: var(--on-accent); }
 }
 
 /* ---------- Responsive ---------- */
@@ -1185,11 +1254,33 @@ html.is-locked { overflow: hidden; }
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--green-500); }
 
+/* Sin JavaScript no hay análisis: se dice en vez de mostrar una página muerta. */
+.noscript {
+  margin: 0 auto;
+  max-width: 52ch;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-sunk);
+  color: var(--ink-600);
+  font-size: 0.9rem;
+}
+
+.noscript strong { display: block; color: var(--ink-900); margin-bottom: 0.2rem; }
+
 /* ---------- Impresión ---------- */
 @media print {
   .edge-wash, .topbar__actions, .rail, .capture__actions, .compare__actions,
   .history__head .btn, .skip-link, .veil, .stage__corner, .stage__overlay { display: none !important; }
   .shell { max-width: none; padding: 0; }
   .label, .window, .plate, .shot { border-color: #999; break-inside: avoid; }
-  body { background: #fff; }
+  /* El tema oscuro no puede llegar al papel: tinta sobre blanco, sin importar
+     el esquema de color con el que se imprimió. */
+  body, .window, .label, .plate, .shot, .empty {
+    background: #fff !important;
+    color: #101a14 !important;
+  }
+  .fact__v, .leaf__area { color: #101a14 !important; }
+  .gauge, .leaf__bar { background: #e1ede5 !important; }
+  .plate__tag, .stage__name { background: #fff !important; color: #101a14 !important; }
 }
