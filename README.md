@@ -10,8 +10,8 @@ Un sistema basado en Visión por Computadora y Deep Learning (YOLO11) diseñado 
 El área foliar es el principal indicador de la capacidad de una planta para realizar fotosíntesis y transpiración. Medirla con precisión permite cuantificar el impacto fisiológico y el nivel de tolerancia vegetal frente a distintos tratamientos.
 
 Este proyecto permite evaluar el estado de cultivos enfrentados a diversas condiciones de estrés, tales como:
-* Estrés hídrico (Sequía) vs. Condiciones óptimas (Riego).
-* Inoculación con hongos (cepa SM4.3) en condiciones de sequía y riego.
+- Estrés hídrico (Sequía) vs. Condiciones óptimas (Riego).
+- Inoculación con hongos fúngicos (por ejemplo, Cepa 1, Cepa 2, Cepa 3, etc.) en condiciones de sequía y riego.
 
 Históricamente, la medición del área foliar dependía de procesos destructivos o modelos manuales que tomaban mucho tiempo. Plant Foliar Area Estimator automatiza este proceso utilizando segmentación de instancias, permitiendo un monitoreo rápido, preciso y sin dañar la planta.
 
@@ -23,18 +23,18 @@ Históricamente, la medición del área foliar dependía de procesos destructivo
   </a>
 </div>
 
-* **Modelo Principal**: YOLO11 (Segmentación de Instancias).
-* **Anotación y Dataset**: Segmentación asistida con SAM 2 (Hiera-Large) mediante herramientas locales como AnyLabeling o CVAT.
-* **Interfaz y Despliegue**: Streamlit y Docker.
+- **Modelo Principal**: YOLO11 (Segmentación de Instancias).
+- **Anotación y Dataset**: Segmentación asistida con SAM 2 (Hiera-Large) mediante herramientas locales como AnyLabeling o CVAT.
+- **Interfaz y Despliegue**: Streamlit y Docker.
 
 ## Arquitectura y Captura de Datos
 
 Para que el modelo logre estimar el área física de las hojas sin marcadores externos, las imágenes deben seguir una regla de proporción estricta.
 
 Todas las imágenes deben respetar las siguientes medidas en su encuadre:
-* **Alto de la imagen**: 30 cm.
-* **Ancho de la imagen**: 21.6 cm.
-* **Resolución recomendada**: 1920x1080 o superior (Resolución mínima: 1280x720).
+- **Alto de la imagen**: 30 cm.
+- **Ancho de la imagen**: 21.6 cm.
+- **Resolución recomendada**: 1920x1080 o superior (Resolución mínima: 1280x720).
 
 > [!IMPORTANT]  
 > Mantener este estándar de captura permite que el sistema realice una transformación matemática directa entre los píxeles identificados por YOLO11 y el área real en centímetros cuadrados, asegurando resultados consistentes.
